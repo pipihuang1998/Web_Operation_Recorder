@@ -10,7 +10,7 @@ let state = {
 
 // --- DOM Injection of Interceptor ---
 const script = document.createElement('script');
-script.src = chrome.runtime.getURL('inject.js');
+script.src = chrome.runtime.getURL('src/inject.js');
 script.onload = function() {
     this.remove();
 };

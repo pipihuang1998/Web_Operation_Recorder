@@ -12,7 +12,7 @@ This is a Chrome Extension designed to record user actions and capture network t
 2. Open Chrome and navigate to `chrome://extensions/`.
 3. Enable **Developer mode** in the top right corner.
 4. Click **Load unpacked** in the top left.
-5. Select the `src/` directory of this project.
+5. Select the **root directory** of this project (the folder containing `manifest.json`).
 6. The extension "Test Recorder & Interceptor" should appear in your list.
 
 ## 2. Usage Guide

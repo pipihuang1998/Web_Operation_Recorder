@@ -3,12 +3,16 @@ const path = require('path');
 
 console.log("Verifying manifest.json...");
 try {
-    const manifestPath = path.join(__dirname, '../src/manifest.json');
+    const manifestPath = path.join(__dirname, '../manifest.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 
     if (!manifest.manifest_version) throw new Error("Missing manifest_version");
     if (manifest.manifest_version !== 3) throw new Error("manifest_version must be 3");
     if (!manifest.background || !manifest.background.service_worker) throw new Error("Missing background service worker");
+
+    // Check paths validity
+    const bgPath = path.join(__dirname, '../', manifest.background.service_worker);
+    if (!fs.existsSync(bgPath)) throw new Error(`Background script not found at ${bgPath}`);
 
     console.log("Manifest is valid JSON and has basic V3 structure.");
 } catch (e) {
