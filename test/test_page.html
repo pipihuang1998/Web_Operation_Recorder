@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Page for Recorder</title>
+</head>
+<body>
+    <h1>Test Recorder Simulation</h1>
+    <div id="app">
+        <form onsubmit="event.preventDefault(); return false;">
+            <label>Username: <input type="text" id="username" class="input-field"></label><br><br>
+            <label>Password: <input type="password" id="password" class="input-field"></label><br><br>
+            <button id="loginBtn" onclick="performLogin()">Login</button>
+        </form>
+    </div>
+    <div id="output"></div>
+
+    <script>
+        function performLogin() {
+            const user = document.getElementById('username').value;
+            console.log("Logging in...");
+
+            // Simulate Fetch API
+            fetch('https://jsonplaceholder.typicode.com/posts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: 'Login Attempt',
+                    body: user,
+                    userId: 1
+                })
+            })
+            .then(response => response.json())
+            .then(json => {
+                document.getElementById('output').innerText = 'Login Result: ' + JSON.stringify(json);
+            });
+
+            // Simulate XHR
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", "https://jsonplaceholder.typicode.com/todos/1");
+            xhr.setRequestHeader('Content-Type', 'application/json'); // Not strictly needed for GET but testing
+            xhr.send();
+            xhr.onload = function() {
+                if (xhr.status == 200) {
+                    console.log("XHR Loaded: " + xhr.responseText);
+                }
+            };
+        }
+    </script>
+</body>
+</html>
