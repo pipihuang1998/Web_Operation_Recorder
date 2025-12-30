@@ -201,10 +201,17 @@ function addLog(type, title, details) {
 
     const div = document.createElement('div');
     div.className = `log-item log-${type.toLowerCase()}`;
-    div.innerHTML = `
-        <span class="log-timestamp">${timestamp}ms</span>
-        <div class="log-title">[${type}] ${title}</div>
-    `;
+
+    const timeSpan = document.createElement('span');
+    timeSpan.className = 'log-timestamp';
+    timeSpan.textContent = `${timestamp}ms`;
+
+    const titleDiv = document.createElement('div');
+    titleDiv.className = 'log-title';
+    titleDiv.textContent = `[${type}] ${title}`;
+
+    div.appendChild(timeSpan);
+    div.appendChild(titleDiv);
     logContainer.appendChild(div);
     logContainer.scrollTop = logContainer.scrollHeight;
 }
