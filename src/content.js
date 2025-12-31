@@ -267,15 +267,15 @@ function removeLog(id, element) {
 
 // --- Config Logic ---
 
-function loadConfig() {
+function loadConfig(callback) {
     chrome.storage.local.get(['urlWhitelist'], (result) => {
         if (result.urlWhitelist) {
             state.config.urlWhitelist = result.urlWhitelist;
         } else {
-             // Default config if none?
              state.config.urlWhitelist = [];
         }
         renderConfig();
+        if (callback) callback();
     });
 }
 
@@ -383,20 +383,21 @@ function selectCase(c, el) {
 }
 
 function startRecording() {
-    loadConfig(); // Reload config before starting
-    state.isRecording = true;
-    state.logs = [];
-    state.sessionID = generateUUID();
-    state.startTime = Date.now();
+    loadConfig(() => {
+        state.isRecording = true;
+        state.logs = [];
+        state.sessionID = generateUUID();
+        state.startTime = Date.now();
 
-    logContainer.innerHTML = '';
-    setupView.classList.add('hidden');
-    recordingView.classList.remove('hidden');
+        logContainer.innerHTML = '';
+        setupView.classList.add('hidden');
+        recordingView.classList.remove('hidden');
 
-    recordBtn.classList.add('hidden');
-    stopBtn.classList.remove('hidden');
+        recordBtn.classList.add('hidden');
+        stopBtn.classList.remove('hidden');
 
-    caseInfoDisplay.innerHTML = `<strong>${state.testCase.title}</strong><br><small>${state.testCase.desc}</small>`;
+        caseInfoDisplay.innerHTML = `<strong>${state.testCase.title}</strong><br><small>${state.testCase.desc}</small>`;
+    });
 }
 
 function stopRecording() {
@@ -412,7 +413,7 @@ function stopRecording() {
 function submit(result, details = {}) {
     // Re-sequence logs before submission
     const cleanedLogs = state.logs.map((log, index) => {
-        const { id, ...rest } = log; // Remove internal ID from output
+        const { id, url, ...rest } = log; // Remove internal ID and full URL from output
         return {
             ...rest,
             sequence: index + 1
@@ -435,8 +436,15 @@ function submit(result, details = {}) {
     };
 
     console.log("---------------- SUBMISSION ----------------");
-    console.log(JSON.stringify(finalData, null, 2));
-    alert(`Test Case ${result}! Check console for JSON output.`);
+    const jsonOutput = JSON.stringify(finalData, null, 2);
+    console.log(jsonOutput);
+
+    navigator.clipboard.writeText(jsonOutput).then(() => {
+        alert(`Test Case ${result}! Result copied to clipboard.`);
+    }).catch(err => {
+        console.error("Clipboard write failed:", err);
+        alert(`Test Case ${result}! Check console for JSON output (Clipboard failed).`);
+    });
 
     resetUI();
 }
@@ -546,26 +554,19 @@ window.addEventListener('message', (event) => {
                  // If whitelist exists but no match, ignore
                  if (!match) return;
             } else {
-                 // No whitelist configured, default behavior (capture all?)
-                 // Requirement says "In the list will be included".
-                 // If list is empty, maybe capture none or all?
-                 // Usually if feature is "whitelist", empty means capture nothing or user hasn't configured it.
-                 // Let's assume capture nothing if list is empty? Or capture all as raw?
-                 // The prompt implies we want to filter noise.
-                 // For backward compatibility, if list is empty, maybe we capture all as raw URL.
-                 match = { alias: "RAW", path: p.url };
+                 // No whitelist configured -> Do not capture anything.
+                 // Requirement: "In the list will be included" (whitelist behavior).
+                 return;
             }
 
-            const title = match.alias === "RAW" ? p.url : `[${match.alias}] ${match.path}`;
+            const title = `[${match.alias}] ${match.path}`;
 
             addLog('NETWORK', `${p.method} ${title} (${p.status})`, {
                 method: p.method,
                 // store alias info
-                systemAlias: match.alias !== "RAW" ? match.alias : null,
-                path: match.alias !== "RAW" ? match.path : null,
-                url: p.url, // Keep full URL just in case, or maybe remove if strict? User said "Output also only separately output system description... then specific operation data only output alias system and path".
-                // We will keep url for debugging but the requirement emphasizes outputting alias and path.
-                // We'll filter output in submit(), here we store everything.
+                systemAlias: match.alias,
+                path: match.path,
+                url: p.url,
                 reqBody: p.reqBody,
                 resBody: p.resBody
             });
