@@ -12,10 +12,18 @@
       try { return JSON.parse(str); } catch(e) { return str; }
   }
 
+  function getAbsoluteUrl(url) {
+      try {
+          return new URL(url, window.location.href).href;
+      } catch (e) {
+          return url;
+      }
+  }
+
   // Hook XHR
   XHR.open = function(method, url) {
     this._method = method;
-    this._url = url;
+    this._url = getAbsoluteUrl(url); // Normalize to absolute URL
     return originalOpen.apply(this, arguments);
   };
 
@@ -52,11 +60,12 @@
 
     if (resource instanceof Request) {
         method = resource.method;
-        url = resource.url;
+        url = getAbsoluteUrl(resource.url);
         // Body reading from Request object is async and consumes it, tricky.
         // We might skip body for Request objects for simplicity or try to clone.
     } else {
         method = config?.method || 'GET';
+        url = getAbsoluteUrl(resource); // Normalize string URL
         body = config?.body;
     }
 
