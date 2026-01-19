@@ -132,6 +132,19 @@ container.innerHTML = `
           </div>
           <div id="outputBox" class="output-box"></div>
           <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copySuccessMsg">✓ Copied to clipboard</p>
+
+          <div style="margin-top: 10px;">
+              <button id="cleanBtn" class="btn btn-primary btn-sm" style="width:100%">Data Cleaning</button>
+          </div>
+
+          <div id="cleanOutputSection" class="hidden" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                  <span style="font-weight: bold;">Cleaned Result</span>
+                  <button id="copyCleanBtn" class="btn btn-secondary btn-sm">Copy Cleaned Data</button>
+              </div>
+              <div id="cleanOutputBox" class="output-box"></div>
+              <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copyCleanSuccessMsg">✓ Copied to clipboard</p>
+          </div>
        </div>
     </div>
 
@@ -166,6 +179,11 @@ const caseInfoDisplay = shadowRoot.getElementById('caseInfoDisplay');
 const outputBox = shadowRoot.getElementById('outputBox');
 const copyBtn = shadowRoot.getElementById('copyBtn');
 const copySuccessMsg = shadowRoot.getElementById('copySuccessMsg');
+const cleanBtn = shadowRoot.getElementById('cleanBtn');
+const cleanOutputSection = shadowRoot.getElementById('cleanOutputSection');
+const cleanOutputBox = shadowRoot.getElementById('cleanOutputBox');
+const copyCleanBtn = shadowRoot.getElementById('copyCleanBtn');
+const copyCleanSuccessMsg = shadowRoot.getElementById('copyCleanSuccessMsg');
 const configList = shadowRoot.getElementById('configList');
 
 const settingsBtn = shadowRoot.getElementById('settingsBtn');
@@ -596,6 +614,61 @@ function showOutput(json) {
 
     // Reset copy success message
     copySuccessMsg.style.visibility = 'hidden';
+    copyCleanSuccessMsg.style.visibility = 'hidden';
+    cleanOutputSection.classList.add('hidden');
+    cleanOutputBox.textContent = '';
+}
+
+function cleanData() {
+    try {
+        const rawJson = outputBox.textContent;
+        if (!rawJson) {
+            alert("No data to clean.");
+            return;
+        }
+        const parsedData = JSON.parse(rawJson);
+        const payload = { optJson: parsedData };
+
+        fetch('http://citc-dev.taas.huawei.com/citc/testCaseAutomation/data_process/optTraceJson/compressed', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            cleanOutputSection.classList.remove('hidden');
+            cleanOutputBox.textContent = JSON.stringify(data, null, 2);
+            // Auto scroll to the result
+             setTimeout(() => {
+                cleanOutputSection.scrollIntoView({ behavior: "smooth" });
+            }, 100);
+        })
+        .catch(error => {
+            console.error('Error cleaning data:', error);
+            alert("Failed to clean data: " + error.message);
+        });
+
+    } catch (e) {
+        console.error('Invalid JSON:', e);
+        alert("Failed to parse existing data for cleaning.");
+    }
+}
+
+function copyCleanedData() {
+    const text = cleanOutputBox.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        copyCleanSuccessMsg.style.visibility = 'visible';
+        setTimeout(() => {
+             copyCleanSuccessMsg.style.visibility = 'hidden';
+        }, 3000);
+    });
 }
 
 function copyToClipboard() {
@@ -650,6 +723,8 @@ reportPassBtn.onclick = reportPass;
 reportBugBtn.onclick = reportBug;
 
 copyBtn.onclick = copyToClipboard;
+cleanBtn.onclick = cleanData;
+copyCleanBtn.onclick = copyCleanedData;
 
 // --- Listeners for Actions ---
 
