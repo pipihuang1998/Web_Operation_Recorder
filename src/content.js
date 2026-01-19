@@ -319,8 +319,9 @@ function saveConfig() {
     configList.querySelectorAll('.config-item').forEach(div => {
         const alias = div.querySelector('.inp-alias').value.trim();
         const prefix = div.querySelector('.inp-prefix').value.trim();
+        const filterGateway = div.querySelector('.inp-filter-gateway').checked;
         if (alias && prefix) {
-            items.push({ alias, prefix });
+            items.push({ alias, prefix, filterGateway });
         }
     });
     state.config.urlWhitelist = items;
@@ -332,10 +333,10 @@ function saveConfig() {
 
 function renderConfig() {
     configList.innerHTML = '';
-    state.config.urlWhitelist.forEach(item => addConfigItem(item.alias, item.prefix));
+    state.config.urlWhitelist.forEach(item => addConfigItem(item.alias, item.prefix, item.filterGateway));
 }
 
-function addConfigItem(alias = '', prefix = '') {
+function addConfigItem(alias = '', prefix = '', filterGateway = false) {
     const div = document.createElement('div');
     div.className = 'config-item';
 
@@ -367,8 +368,30 @@ function addConfigItem(alias = '', prefix = '') {
 
     row2.appendChild(inpPrefix);
 
+    const row3 = document.createElement('div');
+    row3.className = 'config-row';
+    row3.style.alignItems = 'center';
+
+    const lblFilter = document.createElement('label');
+    lblFilter.style.fontSize = '12px';
+    lblFilter.style.display = 'flex';
+    lblFilter.style.alignItems = 'center';
+
+    const chkFilter = document.createElement('input');
+    chkFilter.type = 'checkbox';
+    chkFilter.className = 'inp-filter-gateway';
+    chkFilter.style.marginRight = '5px';
+    chkFilter.style.flex = 'none'; // Prevent input from stretching
+    chkFilter.checked = filterGateway;
+
+    lblFilter.appendChild(chkFilter);
+    lblFilter.appendChild(document.createTextNode('【自动过滤网关】'));
+
+    row3.appendChild(lblFilter);
+
     div.appendChild(row1);
     div.appendChild(row2);
+    div.appendChild(row3);
 
     configList.appendChild(div);
 }
@@ -700,7 +723,13 @@ window.addEventListener('message', (event) => {
 
                  for (const item of sortedConfig) {
                     if (p.url.startsWith(item.prefix)) {
-                        const path = p.url.substring(item.prefix.length);
+                        let path = p.url.substring(item.prefix.length);
+                        if (item.filterGateway) {
+                             const colonIndex = path.indexOf(':');
+                             if (colonIndex !== -1) {
+                                 path = path.substring(colonIndex + 1);
+                             }
+                        }
                         match = { alias: item.alias, path: path };
                         break;
                     }
