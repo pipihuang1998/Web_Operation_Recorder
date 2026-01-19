@@ -124,16 +124,14 @@ container.innerHTML = `
 
     <!-- View 4: Result -->
     <div id="resultView" class="hidden">
-       <h3>Verification</h3>
-       <p>Does the result match the expected outcome?</p>
-       <div id="defectSection" class="hidden">
-          <p style="color: #dc3545; font-weight: bold;">Report Defect</p>
-          <textarea id="failDesc" rows="3" placeholder="Describe the actual result vs expected..."></textarea>
-       </div>
-       <div id="outputSection" class="hidden">
-          <p style="font-weight: bold; margin-bottom:5px;">Submission Output</p>
+       <h3>Submission Output</h3>
+       <div id="outputSection">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+              <span style="font-weight: bold;">JSON Result</span>
+              <button id="copyBtn" class="btn btn-secondary btn-sm">Copy to Clipboard</button>
+          </div>
           <div id="outputBox" class="output-box"></div>
-          <p style="font-size:10px; color:#28a745; margin-top:5px;">✓ Copied to clipboard</p>
+          <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copySuccessMsg">✓ Copied to clipboard</p>
        </div>
     </div>
 
@@ -143,12 +141,10 @@ container.innerHTML = `
      <button id="recordBtn" class="btn btn-primary hidden">Start Recording</button>
      <button id="stopBtn" class="btn btn-secondary hidden">Stop</button>
 
-     <button id="passBtn" class="btn btn-success hidden">Pass</button>
+     <!-- Review View Buttons -->
+     <button id="reportPassBtn" class="btn btn-success hidden">Report Pass Case</button>
+     <button id="reportBugBtn" class="btn btn-danger hidden">Report Bug</button>
 
-     <button id="reportBtn" class="btn btn-primary hidden">Report Case</button>
-
-     <button id="failBtn" class="btn btn-danger hidden">Fail</button>
-     <button id="submitFailBtn" class="btn btn-danger hidden">Submit Defect</button>
      <button id="resetBtn" class="btn btn-secondary hidden">Reset</button>
   </div>
 `;
@@ -167,10 +163,9 @@ const caseList = shadowRoot.getElementById('caseList');
 const logContainer = shadowRoot.getElementById('logContainer');
 const reviewList = shadowRoot.getElementById('reviewList');
 const caseInfoDisplay = shadowRoot.getElementById('caseInfoDisplay');
-const defectSection = shadowRoot.getElementById('defectSection');
-const outputSection = shadowRoot.getElementById('outputSection');
 const outputBox = shadowRoot.getElementById('outputBox');
-const failDesc = shadowRoot.getElementById('failDesc');
+const copyBtn = shadowRoot.getElementById('copyBtn');
+const copySuccessMsg = shadowRoot.getElementById('copySuccessMsg');
 const configList = shadowRoot.getElementById('configList');
 
 const settingsBtn = shadowRoot.getElementById('settingsBtn');
@@ -179,10 +174,8 @@ const saveConfigBtn = shadowRoot.getElementById('saveConfigBtn');
 
 const recordBtn = shadowRoot.getElementById('recordBtn');
 const stopBtn = shadowRoot.getElementById('stopBtn');
-const passBtn = shadowRoot.getElementById('passBtn');
-const reportBtn = shadowRoot.getElementById('reportBtn');
-const failBtn = shadowRoot.getElementById('failBtn');
-const submitFailBtn = shadowRoot.getElementById('submitFailBtn');
+const reportPassBtn = shadowRoot.getElementById('reportPassBtn');
+const reportBugBtn = shadowRoot.getElementById('reportBugBtn');
 const resetBtn = shadowRoot.getElementById('resetBtn');
 const closeBtn = shadowRoot.getElementById('closeBtn');
 
@@ -319,8 +312,9 @@ function saveConfig() {
     configList.querySelectorAll('.config-item').forEach(div => {
         const alias = div.querySelector('.inp-alias').value.trim();
         const prefix = div.querySelector('.inp-prefix').value.trim();
+        const filterGateway = div.querySelector('.inp-filter-gateway').checked;
         if (alias && prefix) {
-            items.push({ alias, prefix });
+            items.push({ alias, prefix, filterGateway });
         }
     });
     state.config.urlWhitelist = items;
@@ -332,10 +326,10 @@ function saveConfig() {
 
 function renderConfig() {
     configList.innerHTML = '';
-    state.config.urlWhitelist.forEach(item => addConfigItem(item.alias, item.prefix));
+    state.config.urlWhitelist.forEach(item => addConfigItem(item.alias, item.prefix, item.filterGateway));
 }
 
-function addConfigItem(alias = '', prefix = '') {
+function addConfigItem(alias = '', prefix = '', filterGateway = false) {
     const div = document.createElement('div');
     div.className = 'config-item';
 
@@ -367,8 +361,30 @@ function addConfigItem(alias = '', prefix = '') {
 
     row2.appendChild(inpPrefix);
 
+    const row3 = document.createElement('div');
+    row3.className = 'config-row';
+    row3.style.alignItems = 'center';
+
+    const lblFilter = document.createElement('label');
+    lblFilter.style.fontSize = '12px';
+    lblFilter.style.display = 'flex';
+    lblFilter.style.alignItems = 'center';
+
+    const chkFilter = document.createElement('input');
+    chkFilter.type = 'checkbox';
+    chkFilter.className = 'inp-filter-gateway';
+    chkFilter.style.marginRight = '5px';
+    chkFilter.style.flex = 'none'; // Prevent input from stretching
+    chkFilter.checked = filterGateway;
+
+    lblFilter.appendChild(chkFilter);
+    lblFilter.appendChild(document.createTextNode('【自动过滤网关】'));
+
+    row3.appendChild(lblFilter);
+
     div.appendChild(row1);
     div.appendChild(row2);
+    div.appendChild(row3);
 
     configList.appendChild(div);
 }
@@ -438,37 +454,20 @@ function startRecording() {
 function stopRecording() {
     state.isRecording = false;
     recordingView.classList.add('hidden');
-    // Instead of going directly to result, we stay or go to review.
-    // Requirement says: "Click 'Pass' -> Then show all tracked operations".
-    // So 'Stop' button puts us in a state where we can click 'Pass' or 'Fail'.
-    // Currently, Stop just reveals Pass/Fail buttons.
-    // For simplicity, let's keep showing the recorded view but with buttons swapped.
-    // Or actually, the prompt says "Click Confirm Case Pass -> Show all tracked operations".
-    // So we need to be in a state where "Pass" is available.
-    // My previous logic was Stop -> ResultView (Pass/Fail).
-    // Let's stick to that, but Pass now goes to Review.
 
-    // However, if we hide recordingView, we can't see logs.
-    // Let's modify: Stop -> RecordingView stays visible (read only) + Footer shows Pass/Fail.
-    // But the current logic hides recordingView and shows resultView.
-    // Let's just follow the existing flow but Pass triggers Review.
-    resultView.classList.remove('hidden');
-    // Hide Defect/Output sections initially
-    defectSection.classList.add('hidden');
-    outputSection.classList.add('hidden');
+    // Go directly to Review View
+    openReview();
 
     stopBtn.classList.add('hidden');
-    passBtn.classList.remove('hidden');
-    failBtn.classList.remove('hidden');
 }
 
 function openReview() {
+    recordingView.classList.add('hidden');
     resultView.classList.add('hidden');
     reviewView.classList.remove('hidden');
 
-    passBtn.classList.add('hidden');
-    failBtn.classList.add('hidden');
-    reportBtn.classList.remove('hidden');
+    reportPassBtn.classList.remove('hidden');
+    reportBugBtn.classList.remove('hidden');
 
     renderReviewList();
 }
@@ -504,8 +503,7 @@ function renderReviewList() {
     });
 }
 
-function submitReport() {
-    // Gather data from review list
+function gatherLogs() {
     const finalLogs = [];
     const items = reviewList.querySelectorAll('.review-item');
     let sequence = 1;
@@ -518,8 +516,6 @@ function submitReport() {
             const logId = cb.dataset.id;
             const originalLog = state.logs.find(l => l.id === logId);
             if (originalLog) {
-                // Update title with user edit
-                // Clone log to avoid mutating original state if we want to go back (though we reset after)
                 const { id, url, ...rest } = originalLog;
                 finalLogs.push({
                     ...rest,
@@ -529,14 +525,28 @@ function submitReport() {
             }
         }
     });
+    return finalLogs;
+}
 
-    submit("PASS", { customLogs: finalLogs });
+function reportPass() {
+    const logs = gatherLogs();
+    // #todo: send request to PASS API
+    submit("PASS", { customLogs: logs });
+}
+
+function reportBug() {
+    const logs = gatherLogs();
+    const defectInfo = prompt("Please enter defect description:");
+    if (defectInfo === null) return; // User cancelled
+
+    // #todo: send request to FAIL API
+    submit("FAIL", { customLogs: logs, defectInfo: defectInfo });
 }
 
 function submit(result, details = {}) {
     let logsToSubmit = details.customLogs;
 
-    // Fallback if not coming from Review (e.g. Fail)
+    // Fallback if not coming from Review
     if (!logsToSubmit) {
          logsToSubmit = state.logs.map((log, index) => {
             const { id, url, ...rest } = log;
@@ -565,22 +575,11 @@ function submit(result, details = {}) {
 
     // Copy to clipboard
     navigator.clipboard.writeText(jsonOutput).then(() => {
-        // Show output in UI instead of alert (for Pass flow)
-        if (result === "PASS") {
-            showOutput(jsonOutput);
-        } else {
-             alert(`Test Case ${result}! Result copied to clipboard.`);
-             resetUI();
-        }
+        showOutput(jsonOutput);
     }).catch(err => {
         console.error("Clipboard write failed:", err);
-        if (result === "PASS") {
-             showOutput(jsonOutput);
-             alert("Clipboard copy failed. Please copy manually from the box.");
-        } else {
-             alert(`Test Case ${result}! Check console for JSON output (Clipboard failed).`);
-             resetUI();
-        }
+        showOutput(jsonOutput);
+        alert("Clipboard copy failed. Please copy manually from the box.");
     });
 }
 
@@ -588,12 +587,25 @@ function showOutput(json) {
     reviewView.classList.add('hidden');
     resultView.classList.remove('hidden');
 
-    defectSection.classList.add('hidden');
-    outputSection.classList.remove('hidden');
     outputBox.textContent = json;
 
-    reportBtn.classList.add('hidden');
+    // Hide buttons
+    reportPassBtn.classList.add('hidden');
+    reportBugBtn.classList.add('hidden');
     resetBtn.classList.remove('hidden');
+
+    // Reset copy success message
+    copySuccessMsg.style.visibility = 'hidden';
+}
+
+function copyToClipboard() {
+    const text = outputBox.textContent;
+    navigator.clipboard.writeText(text).then(() => {
+        copySuccessMsg.style.visibility = 'visible';
+        setTimeout(() => {
+             copySuccessMsg.style.visibility = 'hidden';
+        }, 3000);
+    });
 }
 
 function resetUI() {
@@ -610,15 +622,11 @@ function resetUI() {
 
     resultView.classList.add('hidden');
     setupView.classList.remove('hidden');
-    defectSection.classList.add('hidden');
-    outputSection.classList.add('hidden');
     configView.classList.add('hidden');
     reviewView.classList.add('hidden');
 
-    passBtn.classList.add('hidden');
-    failBtn.classList.add('hidden');
-    reportBtn.classList.add('hidden');
-    submitFailBtn.classList.add('hidden');
+    reportPassBtn.classList.add('hidden');
+    reportBugBtn.classList.add('hidden');
     resetBtn.classList.add('hidden');
 
     renderCases();
@@ -638,38 +646,10 @@ settingsBtn.onclick = () => {
 addConfigBtn.onclick = () => addConfigItem();
 saveConfigBtn.onclick = saveConfig;
 
-passBtn.onclick = () => {
-    openReview();
-};
+reportPassBtn.onclick = reportPass;
+reportBugBtn.onclick = reportBug;
 
-reportBtn.onclick = submitReport;
-
-failBtn.onclick = () => {
-    passBtn.classList.add('hidden');
-    failBtn.classList.add('hidden');
-    defectSection.classList.remove('hidden');
-    submitFailBtn.classList.remove('hidden');
-};
-
-submitFailBtn.onclick = () => {
-    const desc = failDesc.value;
-    if (!desc) return alert("Please enter a description.");
-
-    chrome.runtime.sendMessage({ action: "CAPTURE_SCREENSHOT" }, (response) => {
-        if (response && response.success) {
-             submit("FAIL", {
-                 defectInfo: desc,
-                 screenshot: response.dataUrl
-             });
-        } else {
-             alert("Screenshot failed, submitting without it.");
-             submit("FAIL", {
-                 defectInfo: desc,
-                 screenshot: "FAILED_TO_CAPTURE"
-             });
-        }
-    });
-};
+copyBtn.onclick = copyToClipboard;
 
 // --- Listeners for Actions ---
 
@@ -700,7 +680,13 @@ window.addEventListener('message', (event) => {
 
                  for (const item of sortedConfig) {
                     if (p.url.startsWith(item.prefix)) {
-                        const path = p.url.substring(item.prefix.length);
+                        let path = p.url.substring(item.prefix.length);
+                        if (item.filterGateway) {
+                             const colonIndex = path.indexOf(':');
+                             if (colonIndex !== -1) {
+                                 path = path.substring(colonIndex + 1);
+                             }
+                        }
                         match = { alias: item.alias, path: path };
                         break;
                     }
