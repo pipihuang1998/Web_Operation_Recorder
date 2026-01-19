@@ -26,7 +26,7 @@ const style = document.createElement('style');
 style.textContent = `
   :host { all: initial; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
   .sidebar {
-    position: fixed; top: 0; right: 0; width: 350px; height: 100vh;
+    position: fixed; top: 0; right: 0; width: 400px; height: 100vh;
     background: #f8f9fa; border-left: 1px solid #ccc; z-index: 2147483647;
     display: none; flex-direction: column;
     box-shadow: -2px 0 5px rgba(0,0,0,0.1);
@@ -66,6 +66,15 @@ style.textContent = `
   .config-item { border: 1px solid #eee; padding: 5px; margin-bottom: 5px; border-radius: 3px; background: #fff; }
   .config-row { display: flex; gap: 5px; margin-bottom: 5px; }
   .config-row input { flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 3px; }
+
+  /* Review View Styles */
+  .review-item { display: flex; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; align-items: flex-start; }
+  .review-item input[type="checkbox"] { margin-top: 5px; }
+  .review-item .review-details { flex: 1; }
+  .review-item textarea { width: 100%; font-size: 12px; padding: 4px; margin-top: 2px; height: 40px;}
+  .review-item .review-meta { font-size: 10px; color: #888; margin-bottom: 2px; }
+
+  .output-box { background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; margin-top: 10px; border: 1px solid #ccc; }
 `;
 shadowRoot.appendChild(style);
 
@@ -106,13 +115,25 @@ container.innerHTML = `
        <div id="logContainer"></div>
     </div>
 
-    <!-- View 3: Result -->
+    <!-- View 3: Review/Pass -->
+    <div id="reviewView" class="hidden">
+        <h3>Review & Edit</h3>
+        <p style="font-size:12px; color:#666;">Verify logs, edit descriptions, and select items to report.</p>
+        <div id="reviewList"></div>
+    </div>
+
+    <!-- View 4: Result -->
     <div id="resultView" class="hidden">
        <h3>Verification</h3>
        <p>Does the result match the expected outcome?</p>
        <div id="defectSection" class="hidden">
           <p style="color: #dc3545; font-weight: bold;">Report Defect</p>
           <textarea id="failDesc" rows="3" placeholder="Describe the actual result vs expected..."></textarea>
+       </div>
+       <div id="outputSection" class="hidden">
+          <p style="font-weight: bold; margin-bottom:5px;">Submission Output</p>
+          <div id="outputBox" class="output-box"></div>
+          <p style="font-size:10px; color:#28a745; margin-top:5px;">✓ Copied to clipboard</p>
        </div>
     </div>
 
@@ -121,7 +142,11 @@ container.innerHTML = `
   <div class="footer">
      <button id="recordBtn" class="btn btn-primary hidden">Start Recording</button>
      <button id="stopBtn" class="btn btn-secondary hidden">Stop</button>
+
      <button id="passBtn" class="btn btn-success hidden">Pass</button>
+
+     <button id="reportBtn" class="btn btn-primary hidden">Report Case</button>
+
      <button id="failBtn" class="btn btn-danger hidden">Fail</button>
      <button id="submitFailBtn" class="btn btn-danger hidden">Submit Defect</button>
      <button id="resetBtn" class="btn btn-secondary hidden">Reset</button>
@@ -134,11 +159,17 @@ document.body.appendChild(shadowHost);
 const configView = shadowRoot.getElementById('configView');
 const setupView = shadowRoot.getElementById('setupView');
 const recordingView = shadowRoot.getElementById('recordingView');
+const reviewView = shadowRoot.getElementById('reviewView');
 const resultView = shadowRoot.getElementById('resultView');
+
+const mainContent = shadowRoot.getElementById('mainContent');
 const caseList = shadowRoot.getElementById('caseList');
 const logContainer = shadowRoot.getElementById('logContainer');
+const reviewList = shadowRoot.getElementById('reviewList');
 const caseInfoDisplay = shadowRoot.getElementById('caseInfoDisplay');
 const defectSection = shadowRoot.getElementById('defectSection');
+const outputSection = shadowRoot.getElementById('outputSection');
+const outputBox = shadowRoot.getElementById('outputBox');
 const failDesc = shadowRoot.getElementById('failDesc');
 const configList = shadowRoot.getElementById('configList');
 
@@ -149,6 +180,7 @@ const saveConfigBtn = shadowRoot.getElementById('saveConfigBtn');
 const recordBtn = shadowRoot.getElementById('recordBtn');
 const stopBtn = shadowRoot.getElementById('stopBtn');
 const passBtn = shadowRoot.getElementById('passBtn');
+const reportBtn = shadowRoot.getElementById('reportBtn');
 const failBtn = shadowRoot.getElementById('failBtn');
 const submitFailBtn = shadowRoot.getElementById('submitFailBtn');
 const resetBtn = shadowRoot.getElementById('resetBtn');
@@ -225,6 +257,7 @@ function addLog(type, title, details) {
         id: id,
         sequence: state.logs.length + 1,
         type: type, // ACTION or NETWORK
+        title: title, // Store title for editing later
         timestamp: timestamp,
         ...details
     };
@@ -254,15 +287,17 @@ function addLog(type, title, details) {
     div.appendChild(titleDiv);
 
     logContainer.appendChild(div);
-    logContainer.scrollTop = logContainer.scrollHeight;
+
+    // Auto-scroll to bottom of the main content area
+    // setTimeout to allow rendering
+    setTimeout(() => {
+        mainContent.scrollTop = mainContent.scrollHeight;
+    }, 10);
 }
 
 function removeLog(id, element) {
     state.logs = state.logs.filter(l => l.id !== id);
     element.remove();
-    // Optional: Re-sequence logs?
-    // For now we keep sequences as originally recorded, but output might look gapped.
-    // If user deletes, maybe we should re-sequence on submit.
 }
 
 // --- Config Logic ---
@@ -343,15 +378,13 @@ function toggleConfig(show) {
         setupView.classList.add('hidden');
         recordingView.classList.add('hidden');
         resultView.classList.add('hidden');
+        reviewView.classList.add('hidden');
         configView.classList.remove('hidden');
     } else {
         configView.classList.add('hidden');
         if (state.isRecording) {
             recordingView.classList.remove('hidden');
         } else if (state.testCase) {
-             // If stopped but not submitted? Usually goes to result view.
-             // Simple state machine check
-             // For simplicity, go back to Setup if not recording
              setupView.classList.remove('hidden');
         } else {
             setupView.classList.remove('hidden');
@@ -392,6 +425,8 @@ function startRecording() {
         logContainer.innerHTML = '';
         setupView.classList.add('hidden');
         recordingView.classList.remove('hidden');
+        resultView.classList.add('hidden');
+        reviewView.classList.add('hidden');
 
         recordBtn.classList.add('hidden');
         stopBtn.classList.remove('hidden');
@@ -403,22 +438,111 @@ function startRecording() {
 function stopRecording() {
     state.isRecording = false;
     recordingView.classList.add('hidden');
+    // Instead of going directly to result, we stay or go to review.
+    // Requirement says: "Click 'Pass' -> Then show all tracked operations".
+    // So 'Stop' button puts us in a state where we can click 'Pass' or 'Fail'.
+    // Currently, Stop just reveals Pass/Fail buttons.
+    // For simplicity, let's keep showing the recorded view but with buttons swapped.
+    // Or actually, the prompt says "Click Confirm Case Pass -> Show all tracked operations".
+    // So we need to be in a state where "Pass" is available.
+    // My previous logic was Stop -> ResultView (Pass/Fail).
+    // Let's stick to that, but Pass now goes to Review.
+
+    // However, if we hide recordingView, we can't see logs.
+    // Let's modify: Stop -> RecordingView stays visible (read only) + Footer shows Pass/Fail.
+    // But the current logic hides recordingView and shows resultView.
+    // Let's just follow the existing flow but Pass triggers Review.
     resultView.classList.remove('hidden');
+    // Hide Defect/Output sections initially
+    defectSection.classList.add('hidden');
+    outputSection.classList.add('hidden');
 
     stopBtn.classList.add('hidden');
     passBtn.classList.remove('hidden');
     failBtn.classList.remove('hidden');
 }
 
-function submit(result, details = {}) {
-    // Re-sequence logs before submission
-    const cleanedLogs = state.logs.map((log, index) => {
-        const { id, url, ...rest } = log; // Remove internal ID and full URL from output
-        return {
-            ...rest,
-            sequence: index + 1
-        };
+function openReview() {
+    resultView.classList.add('hidden');
+    reviewView.classList.remove('hidden');
+
+    passBtn.classList.add('hidden');
+    failBtn.classList.add('hidden');
+    reportBtn.classList.remove('hidden');
+
+    renderReviewList();
+}
+
+function renderReviewList() {
+    reviewList.innerHTML = '';
+    state.logs.forEach((log, index) => {
+        const div = document.createElement('div');
+        div.className = 'review-item';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = true;
+        checkbox.dataset.id = log.id;
+
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'review-details';
+
+        const meta = document.createElement('div');
+        meta.className = 'review-meta';
+        meta.textContent = `#${index+1} [${log.type}] ${new Date(log.timestamp + state.startTime).toLocaleTimeString()}`;
+
+        const textarea = document.createElement('textarea');
+        textarea.value = log.title || ''; // Allow editing the title/desc
+
+        detailsDiv.appendChild(meta);
+        detailsDiv.appendChild(textarea);
+
+        div.appendChild(checkbox);
+        div.appendChild(detailsDiv);
+
+        reviewList.appendChild(div);
     });
+}
+
+function submitReport() {
+    // Gather data from review list
+    const finalLogs = [];
+    const items = reviewList.querySelectorAll('.review-item');
+    let sequence = 1;
+
+    items.forEach(item => {
+        const cb = item.querySelector('input[type="checkbox"]');
+        const txt = item.querySelector('textarea');
+
+        if (cb && cb.checked) {
+            const logId = cb.dataset.id;
+            const originalLog = state.logs.find(l => l.id === logId);
+            if (originalLog) {
+                // Update title with user edit
+                // Clone log to avoid mutating original state if we want to go back (though we reset after)
+                const { id, url, ...rest } = originalLog;
+                finalLogs.push({
+                    ...rest,
+                    title: txt.value,
+                    sequence: sequence++
+                });
+            }
+        }
+    });
+
+    submit("PASS", { customLogs: finalLogs });
+}
+
+function submit(result, details = {}) {
+    let logsToSubmit = details.customLogs;
+
+    // Fallback if not coming from Review (e.g. Fail)
+    if (!logsToSubmit) {
+         logsToSubmit = state.logs.map((log, index) => {
+            const { id, url, ...rest } = log;
+            return { ...rest, sequence: index + 1 };
+        });
+    }
 
     const finalData = {
         meta: {
@@ -430,27 +554,50 @@ function submit(result, details = {}) {
             userAgent: navigator.userAgent,
             systems: state.config.urlWhitelist
         },
-        timeline: cleanedLogs,
+        timeline: logsToSubmit,
         defectInfo: details.defectInfo || null,
         screenshot: details.screenshot || null
     };
 
-    console.log("---------------- SUBMISSION ----------------");
     const jsonOutput = JSON.stringify(finalData, null, 2);
+    console.log("---------------- SUBMISSION ----------------");
     console.log(jsonOutput);
 
+    // Copy to clipboard
     navigator.clipboard.writeText(jsonOutput).then(() => {
-        alert(`Test Case ${result}! Result copied to clipboard.`);
+        // Show output in UI instead of alert (for Pass flow)
+        if (result === "PASS") {
+            showOutput(jsonOutput);
+        } else {
+             alert(`Test Case ${result}! Result copied to clipboard.`);
+             resetUI();
+        }
     }).catch(err => {
         console.error("Clipboard write failed:", err);
-        alert(`Test Case ${result}! Check console for JSON output (Clipboard failed).`);
+        if (result === "PASS") {
+             showOutput(jsonOutput);
+             alert("Clipboard copy failed. Please copy manually from the box.");
+        } else {
+             alert(`Test Case ${result}! Check console for JSON output (Clipboard failed).`);
+             resetUI();
+        }
     });
+}
 
-    resetUI();
+function showOutput(json) {
+    reviewView.classList.add('hidden');
+    resultView.classList.remove('hidden');
+
+    defectSection.classList.add('hidden');
+    outputSection.classList.remove('hidden');
+    outputBox.textContent = json;
+
+    reportBtn.classList.add('hidden');
+    resetBtn.classList.remove('hidden');
 }
 
 function resetUI() {
-    const currentConfig = state.config; // Preserve config
+    const currentConfig = state.config;
     state = {
         isRecording: false,
         logs: [],
@@ -464,10 +611,13 @@ function resetUI() {
     resultView.classList.add('hidden');
     setupView.classList.remove('hidden');
     defectSection.classList.add('hidden');
+    outputSection.classList.add('hidden');
     configView.classList.add('hidden');
+    reviewView.classList.add('hidden');
 
     passBtn.classList.add('hidden');
     failBtn.classList.add('hidden');
+    reportBtn.classList.add('hidden');
     submitFailBtn.classList.add('hidden');
     resetBtn.classList.add('hidden');
 
@@ -489,8 +639,10 @@ addConfigBtn.onclick = () => addConfigItem();
 saveConfigBtn.onclick = saveConfig;
 
 passBtn.onclick = () => {
-    submit("PASS");
+    openReview();
 };
+
+reportBtn.onclick = submitReport;
 
 failBtn.onclick = () => {
     passBtn.classList.add('hidden');
@@ -503,7 +655,6 @@ submitFailBtn.onclick = () => {
     const desc = failDesc.value;
     if (!desc) return alert("Please enter a description.");
 
-    // Capture screenshot
     chrome.runtime.sendMessage({ action: "CAPTURE_SCREENSHOT" }, (response) => {
         if (response && response.success) {
              submit("FAIL", {
@@ -522,7 +673,6 @@ submitFailBtn.onclick = () => {
 
 // --- Listeners for Actions ---
 
-// Toggle sidebar
 chrome.runtime.onMessage.addListener((msg) => {
     if (msg.action === "TOGGLE_SIDEBAR") {
         state.sidebarVisible = !state.sidebarVisible;
@@ -541,21 +691,22 @@ window.addEventListener('message', (event) => {
         if (!state.isRecording) return;
         const p = event.data.payload;
         if (p.type === 'NETWORK') {
-            // Filter and Alias logic
+
+            // Logic: Longest Prefix Match
             let match = null;
             if (state.config.urlWhitelist && state.config.urlWhitelist.length > 0) {
-                 for (const item of state.config.urlWhitelist) {
+                 // Sort by length desc
+                 const sortedConfig = [...state.config.urlWhitelist].sort((a, b) => b.prefix.length - a.prefix.length);
+
+                 for (const item of sortedConfig) {
                     if (p.url.startsWith(item.prefix)) {
                         const path = p.url.substring(item.prefix.length);
                         match = { alias: item.alias, path: path };
                         break;
                     }
                  }
-                 // If whitelist exists but no match, ignore
                  if (!match) return;
             } else {
-                 // No whitelist configured -> Do not capture anything.
-                 // Requirement: "In the list will be included" (whitelist behavior).
                  return;
             }
 
@@ -563,7 +714,6 @@ window.addEventListener('message', (event) => {
 
             addLog('NETWORK', `${p.method} ${title} (${p.status})`, {
                 method: p.method,
-                // store alias info
                 systemAlias: match.alias,
                 path: match.path,
                 url: p.url,
@@ -577,11 +727,10 @@ window.addEventListener('message', (event) => {
 // DOM Observer
 document.addEventListener('click', (e) => {
     if (!state.isRecording) return;
-    if (shadowHost.contains(e.target)) return; // Ignore sidebar clicks
+    if (shadowHost.contains(e.target)) return;
 
     const fingerprint = getFingerprint(e.target);
 
-    // Highlight effect
     const originalOutline = e.target.style.outline;
     e.target.style.outline = "2px solid red";
     setTimeout(() => {
@@ -605,17 +754,3 @@ document.addEventListener('change', (e) => {
         target: fingerprint
     });
 }, true);
-
-// Input capture is noisy, maybe throttle or just use change?
-// Requirement says "Input". Let's use 'input' event but maybe debounce or just log it.
-// To avoid spam, I'll log 'input' events but maybe not every keystroke if it's too fast.
-// For now, I'll stick to 'change' for input fields as it represents the final value,
-// but if I need real-time typing, 'input' is needed.
-// Let's add 'input' but only for verification sake, usually 'change' is enough for tests.
-// The prompt says: [ACTION] input "admin" in "用户名" window.
-// This usually implies the final result or significant milestones.
-// I will just use 'change' for inputs to keep logs clean, as it captures the final committed value.
-// However, the prompt specifically lists "Input".
-// I will add a listener for 'input' but maybe distinct from 'change'.
-// Actually, for a recorder, 'change' is safer. 'input' fires on every key.
-// I will stick to 'change' for now to represent "User entered text".
