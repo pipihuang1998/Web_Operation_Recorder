@@ -128,13 +128,14 @@ container.innerHTML = `
        <div id="outputSection">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
               <span style="font-weight: bold;">JSON Result</span>
-              <div>
-                  <button id="cleanBtn" class="btn btn-primary btn-sm">Data Cleaning</button>
-                  <button id="copyBtn" class="btn btn-secondary btn-sm">Copy to Clipboard</button>
-              </div>
+              <button id="copyBtn" class="btn btn-secondary btn-sm">Copy to Clipboard</button>
           </div>
           <div id="outputBox" class="output-box"></div>
           <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copySuccessMsg">✓ Copied to clipboard</p>
+
+          <div style="margin-top: 10px;">
+              <button id="cleanBtn" class="btn btn-primary btn-sm" style="width:100%">Data Cleaning</button>
+          </div>
 
           <div id="cleanOutputSection" class="hidden" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
