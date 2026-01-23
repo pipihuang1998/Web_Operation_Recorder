@@ -6,7 +6,7 @@ let state = {
   testCase: null,
   sidebarVisible: false,
   startTime: 0,
-  config: { urlWhitelist: [] }
+  config: { urlWhitelist: [], username: '', productCode: '' }
 };
 
 // --- DOM Injection of Interceptor ---
@@ -94,6 +94,18 @@ container.innerHTML = `
     <!-- View 0: Configuration -->
     <div id="configView" class="hidden">
         <h3>Configuration</h3>
+
+        <div style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+            <div style="margin-bottom: 5px;">
+                <label style="font-size: 12px; font-weight: bold; display:block;">Product Code (x-test-app-id)</label>
+                <input type="text" id="cfgProductCode" placeholder="e.g. CITC" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
+            </div>
+             <div style="margin-bottom: 5px;">
+                <label style="font-size: 12px; font-weight: bold; display:block;">Username (x-user-account)</label>
+                <input type="text" id="cfgUsername" placeholder="e.g. h00894562" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
+            </div>
+        </div>
+
         <p style="font-size:12px; color:#666;">Define URL whitelists and aliases. Only matching URLs will be captured.</p>
         <div id="configList"></div>
         <button id="addConfigBtn" class="btn btn-secondary btn-sm" style="margin-top:5px;">+ Add Item</button>
@@ -119,6 +131,10 @@ container.innerHTML = `
     <div id="reviewView" class="hidden">
         <h3>Review & Edit</h3>
         <p style="font-size:12px; color:#666;">Verify logs, edit descriptions, and select items to report.</p>
+        <div style="margin-bottom: 10px;">
+            <button id="selectAllBtn" class="btn btn-secondary btn-sm" style="margin-left: 0;">Select All</button>
+            <button id="deselectAllBtn" class="btn btn-secondary btn-sm">Deselect All</button>
+        </div>
         <div id="reviewList"></div>
     </div>
 
@@ -185,6 +201,10 @@ const cleanOutputBox = shadowRoot.getElementById('cleanOutputBox');
 const copyCleanBtn = shadowRoot.getElementById('copyCleanBtn');
 const copyCleanSuccessMsg = shadowRoot.getElementById('copyCleanSuccessMsg');
 const configList = shadowRoot.getElementById('configList');
+const cfgProductCode = shadowRoot.getElementById('cfgProductCode');
+const cfgUsername = shadowRoot.getElementById('cfgUsername');
+const selectAllBtn = shadowRoot.getElementById('selectAllBtn');
+const deselectAllBtn = shadowRoot.getElementById('deselectAllBtn');
 
 const settingsBtn = shadowRoot.getElementById('settingsBtn');
 const addConfigBtn = shadowRoot.getElementById('addConfigBtn');
@@ -314,12 +334,14 @@ function removeLog(id, element) {
 // --- Config Logic ---
 
 function loadConfig(callback) {
-    chrome.storage.local.get(['urlWhitelist'], (result) => {
-        if (result.urlWhitelist) {
-            state.config.urlWhitelist = result.urlWhitelist;
-        } else {
-             state.config.urlWhitelist = [];
-        }
+    chrome.storage.local.get(['urlWhitelist', 'username', 'productCode'], (result) => {
+        state.config.urlWhitelist = result.urlWhitelist || [];
+        state.config.username = result.username || '';
+        state.config.productCode = result.productCode || '';
+
+        if (cfgUsername) cfgUsername.value = state.config.username;
+        if (cfgProductCode) cfgProductCode.value = state.config.productCode;
+
         renderConfig();
         if (callback) callback();
     });
@@ -335,8 +357,19 @@ function saveConfig() {
             items.push({ alias, prefix, filterGateway });
         }
     });
+
+    const username = cfgUsername.value.trim();
+    const productCode = cfgProductCode.value.trim();
+
     state.config.urlWhitelist = items;
-    chrome.storage.local.set({ urlWhitelist: items }, () => {
+    state.config.username = username;
+    state.config.productCode = productCode;
+
+    chrome.storage.local.set({
+        urlWhitelist: items,
+        username: username,
+        productCode: productCode
+    }, () => {
         alert("Configuration saved.");
         toggleConfig(false);
     });
@@ -632,7 +665,9 @@ function cleanData() {
         fetch('http://citc-dev.taas.huawei.com/citc/testCaseAutomation/data_process/optTraceJson/compressed', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'x-test-app-id': state.config.productCode,
+                'x-user-account': state.config.username
             },
             body: JSON.stringify(payload)
         })
@@ -669,6 +704,16 @@ function copyCleanedData() {
              copyCleanSuccessMsg.style.visibility = 'hidden';
         }, 3000);
     });
+}
+
+function selectAll() {
+    const checkboxes = reviewList.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = true);
+}
+
+function deselectAll() {
+    const checkboxes = reviewList.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach(cb => cb.checked = false);
 }
 
 function copyToClipboard() {
@@ -725,6 +770,9 @@ reportBugBtn.onclick = reportBug;
 copyBtn.onclick = copyToClipboard;
 cleanBtn.onclick = cleanData;
 copyCleanBtn.onclick = copyCleanedData;
+
+selectAllBtn.onclick = selectAll;
+deselectAllBtn.onclick = deselectAll;
 
 // --- Listeners for Actions ---
 
