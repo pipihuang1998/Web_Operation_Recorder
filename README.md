@@ -1,4 +1,4 @@
-# Chrome 测试操作录制插件 (Chrome Test Recorder)
+# Chrome 测试操作录制插件 (Chrome Case Recorder)
 
 这是一个 Chrome 扩展程序，旨在测试用例执行期间录制用户操作并捕获网络流量（XHR/Fetch）。它会在页面中注入一个侧边栏来管理测试会话。
 
@@ -15,7 +15,7 @@
 3. 开启右上角的 **开发者模式 (Developer mode)**。
 4. 点击左上角的 **加载已解压的扩展程序 (Load unpacked)**。
 5. 选择本项目中的 `src/` 目录。
-6. "Test Recorder & Interceptor" 扩展程序应出现在您的列表中。
+6. "Case Recorder & Interceptor" 扩展程序应出现在您的列表中。
 
 ## 2. 使用指南
 
@@ -166,6 +166,6 @@ graph TD
    - 所有 UI 样式都定义在 `content.js` 的 `shadowRoot` 中，避免污染宿主页面。
 
 3. **调试**:
-   - UI 和逻辑调试：使用 Chrome DevTools 的 Console 面板（Context 选择 "Test Recorder..."）。
+   - UI 和逻辑调试：使用 Chrome DevTools 的 Console 面板（Context 选择 "Case Recorder..."）。
    - 网络拦截调试：查看 Console 中的 `RECORDER_INJECT` 消息。
 

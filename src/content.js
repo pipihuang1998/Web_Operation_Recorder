@@ -82,7 +82,7 @@ const container = document.createElement('div');
 container.className = 'sidebar';
 container.innerHTML = `
   <div class="header">
-    <span style="font-size: 16px; font-weight: bold;">Test Recorder</span>
+    <span style="font-size: 16px; font-weight: bold;">Case Recorder</span>
     <div>
         <button id="settingsBtn" style="background:none;border:none;color:white;cursor:pointer;font-size:14px;margin-right:10px;">Settings</button>
         <button id="closeBtn" style="background:none;border:none;color:white;cursor:pointer;font-size:20px;">&times;</button>
@@ -219,9 +219,9 @@ const closeBtn = shadowRoot.getElementById('closeBtn');
 
 // --- Mock Data ---
 const MOCK_CASES = [
-  { id: "TC-202501", title: "User Login", desc: "1. Click Login Button\n2. Enter 'admin'\n3. Verify Success" },
-  { id: "TC-202502", title: "Add to Cart", desc: "1. Select Item\n2. Click Add to Cart\n3. Verify Cart Count" },
-  { id: "TC-202503", title: "Search Item", desc: "1. Enter 'iPhone'\n2. Click Search\n3. Verify Results" }
+  { id: "CASE-0001", title: "用户登录测试", desc: "1. 点击登录\n2. 输入 'admin'\n3. 登录成功" },
+  { id: "CASE-0002", title: "新增测试", desc: "1. 输入新增按钮\n2. 点击确认\n3. 新增成功" },
+  { id: "CASE-0003", title: "搜索测试", desc: "1. 输入2025\n2. 点击搜索\n3. 搜索成功" }
 ];
 
 // --- Helpers ---
@@ -662,7 +662,7 @@ function cleanData() {
         const parsedData = JSON.parse(rawJson);
         const payload = { optJson: parsedData };
 
-        fetch('http://citc-dev.taas.huawei.com/citc/testCaseAutomation/data_process/optTraceJson/compressed', {
+        fetch('http://citc-dev.taas.huawei.com/citc/testCaseAutomation/data_process/optTraceJson/compressed/text', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

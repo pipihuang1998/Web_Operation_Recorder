@@ -1,6 +1,6 @@
 # 白名单配置指南 (Whitelist Configuration Guide)
 
-Test Recorder 插件使用白名单机制来决定哪些网络请求（XHR/Fetch）应该被捕获。只有匹配白名单中定义的 URL 前缀的请求才会被记录。
+Case Recorder 插件使用白名单机制来决定哪些网络请求（XHR/Fetch）应该被捕获。只有匹配白名单中定义的 URL 前缀的请求才会被记录。
 
 ## 配置项说明
 
@@ -71,3 +71,4 @@ Test Recorder 插件使用白名单机制来决定哪些网络请求（XHR/Fetch
 **捕获结果**:
 - `path`: "part1:part2/api"
 - **说明**: 只移除 **第一个** 冒号之前的内容。
+
