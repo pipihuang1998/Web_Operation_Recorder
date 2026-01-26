@@ -289,7 +289,10 @@ container.innerHTML = `
           <div id="cleanOutputSection" class="hidden" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
                   <span style="font-weight: bold;">Cleaned Result</span>
-                  <button id="copyCleanBtn" class="btn btn-secondary btn-sm">Copy Cleaned Data</button>
+                  <div>
+                      <button id="uploadCleanBtn" class="btn btn-primary btn-sm">Upload</button>
+                      <button id="copyCleanBtn" class="btn btn-secondary btn-sm">Copy</button>
+                  </div>
               </div>
               <div id="cleanOutputBox" class="output-box"></div>
               <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copyCleanSuccessMsg">✓ Copied to clipboard</p>
@@ -331,6 +334,7 @@ const copySuccessMsg = shadowRoot.getElementById('copySuccessMsg');
 const cleanBtn = shadowRoot.getElementById('cleanBtn');
 const cleanOutputSection = shadowRoot.getElementById('cleanOutputSection');
 const cleanOutputBox = shadowRoot.getElementById('cleanOutputBox');
+const uploadCleanBtn = shadowRoot.getElementById('uploadCleanBtn');
 const copyCleanBtn = shadowRoot.getElementById('copyCleanBtn');
 const copyCleanSuccessMsg = shadowRoot.getElementById('copyCleanSuccessMsg');
 const configList = shadowRoot.getElementById('configList');
@@ -821,6 +825,60 @@ function copyCleanedData() {
     });
 }
 
+function uploadCleanedData() {
+    try {
+        const rawJson = outputBox.textContent;
+        if (!rawJson) {
+            alert("No source data found.");
+            return;
+        }
+        const parsedData = JSON.parse(rawJson);
+        const caseId = OptTraceService.extractCaseId(parsedData);
+        const content = cleanOutputBox.textContent;
+
+        if (!content) {
+            alert("No cleaned content to upload.");
+            return;
+        }
+
+        const tracedata = {
+            caseId: caseId,
+            content: content
+        };
+
+        uploadCleanBtn.disabled = true;
+        uploadCleanBtn.textContent = "Uploading...";
+
+        fetch('http://citc-dev.taas.huawei.com/citc/testCaseAutomation/tracedata/upload/text', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-test-app-id': state.config.productCode,
+                'x-user-account': state.config.username
+            },
+            body: JSON.stringify(tracedata)
+        })
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            alert("Upload successful!");
+        })
+        .catch(error => {
+            console.error('Upload failed:', error);
+            alert("Upload failed: " + error.message);
+        })
+        .finally(() => {
+            uploadCleanBtn.disabled = false;
+            uploadCleanBtn.textContent = "Upload";
+        });
+
+    } catch (e) {
+        console.error('Error preparing upload:', e);
+        alert("Failed to prepare upload: " + e.message);
+    }
+}
+
 function selectAll() {
     const checkboxes = reviewList.querySelectorAll('input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = true);
@@ -885,6 +943,7 @@ reportBugBtn.onclick = reportBug;
 copyBtn.onclick = copyToClipboard;
 cleanBtn.onclick = cleanData;
 copyCleanBtn.onclick = copyCleanedData;
+uploadCleanBtn.onclick = uploadCleanedData;
 
 selectAllBtn.onclick = selectAll;
 deselectAllBtn.onclick = deselectAll;

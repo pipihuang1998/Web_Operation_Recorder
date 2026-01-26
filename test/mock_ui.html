@@ -25,6 +25,26 @@
         window.triggerMessage = (msg) => {
             listeners.forEach(cb => cb(msg));
         };
+        // Mock fetch
+        window.fetch = (url, options) => {
+             console.log("Mock Fetch Call:", url, options);
+             if (url.includes("/upload/text")) {
+                 return Promise.resolve({
+                     ok: true,
+                     json: () => Promise.resolve({ status: "success" })
+                 });
+             }
+             return Promise.reject("Unknown URL");
+        };
+        // Mock alert
+        window.alert = (msg) => {
+             console.log("Mock Alert:", msg);
+             // Add to DOM for verification
+             const d = document.createElement("div");
+             d.id = "mock-alert";
+             d.textContent = msg;
+             document.body.appendChild(d);
+        };
     </script>
 </head>
 <body>
