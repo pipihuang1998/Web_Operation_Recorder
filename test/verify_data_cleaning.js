@@ -166,6 +166,26 @@ function testSimplifyJson() {
     assert(Array.isArray(simplifiedStr), "Stringified JSON parsed and simplified");
     assert(simplifiedStr.length === 2, "Simplified string list truncated");
 
+    // 4. Test Nested Lists in Dict
+    const nestedListInDict = [
+        { items: [ {id:1}, {id:2} ] },
+        { items: [ {id:3}, {id:4} ] }
+    ];
+    const simpleNested = OptTraceService.simplifyJson(nestedListInDict);
+    assert(simpleNested.length === 2, "Outer list truncated");
+    assert(simpleNested[0].items.length === 2, "Inner list truncated");
+    assert(typeof simpleNested[0].items[1] === 'string', "Inner list truncated correctly");
+
+    // 5. Test Dict in Dict in List
+    const complexNested = {
+        data: {
+            matrix: [ [1,2,3], [4,5,6] ]
+        }
+    };
+    const simpleComplex = OptTraceService.simplifyJson(complexNested);
+    assert(simpleComplex.data.matrix.length === 2, "Matrix outer list truncated");
+    assert(simpleComplex.data.matrix[0].length === 2, "Matrix inner list truncated");
+
     console.log("simplifyJson Passed.");
 }
 
