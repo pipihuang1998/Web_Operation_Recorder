@@ -102,23 +102,23 @@
 graph TD
     subgraph Browser Context
         User[用户操作] --> DOM[DOM 页面]
-        User --> ExtensionUI[侧边栏 UI (Shadow DOM)]
+        User --> ExtensionUI[侧边栏 UI Shadow DOM]
     end
     
-    subgraph Content Script (content.js)
+    subgraph Content Script content.js
         DOMObserver[DOM 观察者] -->|捕获点击/输入| LogManager[日志管理器]
         MsgListener[消息监听器] -->|接收网络数据| LogManager
-        StateManager[状态管理 (State)] --> ExtensionUI
-        ConfigMgr[配置管理] <-->|读写| ChromeStorage[(Chrome Storage)]
+        StateManager[状态管理 State] --> ExtensionUI
+        ConfigMgr[配置管理] <-->|读写| ChromeStorage[Chrome Storage]
     end
     
-    subgraph Injected Script (inject.js)
+    subgraph Injected Script inject.js
         XHR_Proxy[XHR 代理] -->|拦截| NetworkTraffic[网络流量]
         Fetch_Proxy[Fetch 代理] -->|拦截| NetworkTraffic
         NetworkTraffic -->|window.postMessage| MsgListener
     end
     
-    subgraph Background Service (background.js)
+    subgraph Background Service background.js
         BrowserAction[图标点击] -->|Toggle Sidebar| ContentScript
         ScreenshotMgr[截图管理] -->|Capture Visible Tab| ContentScript
     end
