@@ -61,8 +61,6 @@
 * 管理 **侧边栏 UI**（Shadow DOM）。
 * 监听 DOM 事件（点击、更改）以生成 **元素指纹 (element fingerprints)**。
 * 接收来自 `inject.js` 的网络日志。
-
-
 * **src/inject.js**: 注入到页面上下文中的脚本，用于对 `XMLHttpRequest` 和 `window.fetch` 进行“猴子补丁” (monkey-patch/拦截修改)。它拦截网络流量并通过 `window.postMessage` 将详情发送回 `content.js`。
 * **test/**: 包含验证脚本和虚拟测试页面。
 * `verify_inject.js`: 用于验证网络拦截逻辑的 Node.js 脚本。
@@ -93,6 +91,80 @@
 * 几何位置 (BoundingRect)
 
 这些数据对于可靠的测试回放和分析至关重要。
+
+## 5. 开发人员指南 (Developer Guide)
+
+本节详细介绍了扩展的内部架构、数据流和开发注意事项。
+
+### 架构图
+
+```mermaid
+graph TD
+    subgraph Browser Context
+        User[用户操作] --> DOM[DOM 页面]
+        User --> ExtensionUI[侧边栏 UI (Shadow DOM)]
+    end
+
+    subgraph Content Script (content.js)
+        DOMObserver[DOM 观察者] -->|捕获点击/输入| LogManager[日志管理器]
+        MsgListener[消息监听器] -->|接收网络数据| LogManager
+        StateManager[状态管理 (State)] --> ExtensionUI
+        ConfigMgr[配置管理] <-->|读写| ChromeStorage[(Chrome Storage)]
+    end
+
+    subgraph Injected Script (inject.js)
+        XHR_Proxy[XHR 代理] -->|拦截| NetworkTraffic[网络流量]
+        Fetch_Proxy[Fetch 代理] -->|拦截| NetworkTraffic
+        NetworkTraffic -->|window.postMessage| MsgListener
+    end
+
+    subgraph Background Service (background.js)
+        BrowserAction[图标点击] -->|Toggle Sidebar| ContentScript
+        ScreenshotMgr[截图管理] -->|Capture Visible Tab| ContentScript
+    end
+
+    ExtensionUI -->|配置更新| ConfigMgr
+    ExtensionUI -->|提交/清洗数据| ExternalAPI[外部数据清洗接口]
+
+    DOMObserver -.->|生成指纹| ElementFingerprint
+```
+
+### 关键文件功能详解
+
+#### 1. `src/content.js` (核心逻辑)
+这是扩展的大脑，运行在网页的隔离环境中。
+- **状态管理 (`state` 对象)**: 维护录制状态、日志队列、当前会话 ID、配置信息（用户名、产品编码、白名单）。
+- **Shadow DOM UI**: 使用 Shadow DOM (`#recorder-sidebar-host`) 隔离扩展样式与页面样式。UI 包含以下视图：
+    - `configView`: 配置用户名、产品编码和 URL 白名单。
+    - `setupView`: 选择测试用例。
+    - `recordingView`: 实时显示录制日志。
+    - `reviewView`: 录制结束后审查、编辑、批量选择/取消选择日志。
+    - `resultView`: 显示最终 JSON 结果及数据清洗功能。
+- **配置持久化**: 通过 `loadConfig`/`saveConfig` 与 `chrome.storage.local` 同步。
+- **数据清洗 (`cleanData`)**: 将录制数据发送到后端接口进行压缩/优化，请求头包含 `x-test-app-id` 和 `x-user-account`。
+
+#### 2. `src/inject.js` (网络层)
+由于 Content Script 无法直接访问页面的 `window.fetch` 或 `XMLHttpRequest` 对象，因此需要注入此脚本。
+- **Monkey Patching**: 重写 `window.XMLHttpRequest` 和 `window.fetch`。
+- **通信**: 使用 `window.postMessage` 将拦截到的请求信息（URL、Method、Body、Status）发送给 `content.js`。
+- **URL 归一化**: 自动将相对 URL 转换为绝对 URL，以便于白名单匹配。
+
+#### 3. `src/background.js` (后台服务)
+- **图标交互**: 监听 `chrome.action.onClicked`，向当前标签页发送 `TOGGLE_SIDEBAR` 消息。
+- **截图能力**: 提供 `captureVisibleTab` 接口（如果需要扩展截图功能）。
+
+### 开发注意事项
+
+1. **安全性**:
+   - 在 UI 中渲染日志时，严禁使用 `innerHTML` 插入用户生成的内容（如输入值），必须使用 `textContent` 或 `innerText` 防止 XSS 攻击。
+   - `manifest.json` 使用 V3 版本，限制了远程代码执行。
+
+2. **样式隔离**:
+   - 所有 UI 样式都定义在 `content.js` 的 `shadowRoot` 中，避免污染宿主页面。
+
+3. **调试**:
+   - UI 和逻辑调试：使用 Chrome DevTools 的 Console 面板（Context 选择 "Test Recorder..."）。
+   - 网络拦截调试：查看 Console 中的 `RECORDER_INJECT` 消息。
 
 
 # Chrome Test Recorder & Interceptor
