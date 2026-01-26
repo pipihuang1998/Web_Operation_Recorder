@@ -215,9 +215,9 @@ const container = document.createElement('div');
 container.className = 'sidebar';
 container.innerHTML = `
   <div class="header">
-    <span style="font-size: 16px; font-weight: bold;">Case Recorder</span>
+    <span style="font-size: 16px; font-weight: bold;">用例录制器 (Case Recorder)</span>
     <div>
-        <button id="settingsBtn" style="background:none;border:none;color:white;cursor:pointer;font-size:14px;margin-right:10px;">Settings</button>
+        <button id="settingsBtn" style="background:none;border:none;color:white;cursor:pointer;font-size:14px;margin-right:10px;">设置</button>
         <button id="closeBtn" style="background:none;border:none;color:white;cursor:pointer;font-size:20px;">&times;</button>
     </div>
   </div>
@@ -226,76 +226,76 @@ container.innerHTML = `
 
     <!-- View 0: Configuration -->
     <div id="configView" class="hidden">
-        <h3>Configuration</h3>
+        <h3>配置 (Configuration)</h3>
 
         <div style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
             <div style="margin-bottom: 5px;">
-                <label style="font-size: 12px; font-weight: bold; display:block;">Product Code (x-test-app-id)</label>
+                <label style="font-size: 12px; font-weight: bold; display:block;">产品编码 (x-test-app-id)</label>
                 <input type="text" id="cfgProductCode" placeholder="e.g. CITC" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
             </div>
              <div style="margin-bottom: 5px;">
-                <label style="font-size: 12px; font-weight: bold; display:block;">Username (x-user-account)</label>
+                <label style="font-size: 12px; font-weight: bold; display:block;">用户名 (x-user-account)</label>
                 <input type="text" id="cfgUsername" placeholder="e.g. h00894562" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
             </div>
         </div>
 
-        <p style="font-size:12px; color:#666;">Define URL whitelists and aliases. Only matching URLs will be captured.</p>
+        <p style="font-size:12px; color:#666;">定义URL白名单和别名。仅捕获匹配的URL。</p>
         <div id="configList"></div>
-        <button id="addConfigBtn" class="btn btn-secondary btn-sm" style="margin-top:5px;">+ Add Item</button>
+        <button id="addConfigBtn" class="btn btn-secondary btn-sm" style="margin-top:5px;">+ 添加项</button>
         <div style="margin-top: 20px; text-align: right;">
-             <button id="saveConfigBtn" class="btn btn-primary">Save & Back</button>
+             <button id="saveConfigBtn" class="btn btn-primary">保存并返回</button>
         </div>
     </div>
 
     <!-- View 1: Setup -->
     <div id="setupView">
-       <h3>Select Test Case</h3>
-       <div id="caseList">Loading cases...</div>
+       <h3>选择测试用例</h3>
+       <div id="caseList">正在加载用例...</div>
     </div>
 
     <!-- View 2: Recording -->
     <div id="recordingView" class="hidden">
        <div id="caseInfoDisplay" style="padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 4px; margin-bottom:10px;"></div>
-       <div style="font-size: 12px; color: #666; margin-bottom: 5px;">Event Log:</div>
+       <div style="font-size: 12px; color: #666; margin-bottom: 5px;">事件日志:</div>
        <div id="logContainer"></div>
     </div>
 
     <!-- View 3: Review/Pass -->
     <div id="reviewView" class="hidden">
-        <h3>Review & Edit</h3>
-        <p style="font-size:12px; color:#666;">Verify logs, edit descriptions, and select items to report.</p>
+        <h3>审查与编辑</h3>
+        <p style="font-size:12px; color:#666;">验证日志，编辑描述，并选择要报告的项目。</p>
         <div style="margin-bottom: 10px;">
-            <button id="selectAllBtn" class="btn btn-secondary btn-sm" style="margin-left: 0;">Select All</button>
-            <button id="deselectAllBtn" class="btn btn-secondary btn-sm">Deselect All</button>
+            <button id="selectAllBtn" class="btn btn-secondary btn-sm" style="margin-left: 0;">全选</button>
+            <button id="deselectAllBtn" class="btn btn-secondary btn-sm">取消全选</button>
         </div>
         <div id="reviewList"></div>
     </div>
 
     <!-- View 4: Result -->
     <div id="resultView" class="hidden">
-       <h3>Submission Output</h3>
+       <h3>提交结果</h3>
        <div id="outputSection">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-              <span style="font-weight: bold;">JSON Result</span>
-              <button id="copyBtn" class="btn btn-secondary btn-sm">Copy to Clipboard</button>
+              <span style="font-weight: bold;">JSON 结果</span>
+              <button id="copyBtn" class="btn btn-secondary btn-sm">复制到剪贴板</button>
           </div>
           <div id="outputBox" class="output-box"></div>
-          <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copySuccessMsg">✓ Copied to clipboard</p>
+          <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copySuccessMsg">✓ 已复制到剪贴板</p>
 
           <div style="margin-top: 10px;">
-              <button id="cleanBtn" class="btn btn-primary btn-sm" style="width:100%">Data Cleaning</button>
+              <button id="cleanBtn" class="btn btn-primary btn-sm" style="width:100%">数据清洗</button>
           </div>
 
           <div id="cleanOutputSection" class="hidden" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                  <span style="font-weight: bold;">Cleaned Result</span>
+                  <span style="font-weight: bold;">清洗后的结果</span>
                   <div>
-                      <button id="uploadCleanBtn" class="btn btn-primary btn-sm">Upload</button>
-                      <button id="copyCleanBtn" class="btn btn-secondary btn-sm">Copy</button>
+                      <button id="uploadCleanBtn" class="btn btn-primary btn-sm">上传</button>
+                      <button id="copyCleanBtn" class="btn btn-secondary btn-sm">复制</button>
                   </div>
               </div>
               <div id="cleanOutputBox" class="output-box"></div>
-              <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copyCleanSuccessMsg">✓ Copied to clipboard</p>
+              <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copyCleanSuccessMsg">✓ 已复制到剪贴板</p>
           </div>
        </div>
     </div>
@@ -303,14 +303,14 @@ container.innerHTML = `
   </div>
 
   <div class="footer">
-     <button id="recordBtn" class="btn btn-primary hidden">Start Recording</button>
-     <button id="stopBtn" class="btn btn-secondary hidden">Stop</button>
+     <button id="recordBtn" class="btn btn-primary hidden">开始录制</button>
+     <button id="stopBtn" class="btn btn-secondary hidden">停止</button>
 
      <!-- Review View Buttons -->
-     <button id="reportPassBtn" class="btn btn-success hidden">Report Pass Case</button>
-     <button id="reportBugBtn" class="btn btn-danger hidden">Report Bug</button>
+     <button id="reportPassBtn" class="btn btn-success hidden">报告通过用例</button>
+     <button id="reportBugBtn" class="btn btn-danger hidden">报告缺陷</button>
 
-     <button id="resetBtn" class="btn btn-secondary hidden">Reset</button>
+     <button id="resetBtn" class="btn btn-secondary hidden">重置</button>
   </div>
 `;
 shadowRoot.appendChild(container);
@@ -507,7 +507,7 @@ function saveConfig() {
         username: username,
         productCode: productCode
     }, () => {
-        alert("Configuration saved.");
+        alert("配置已保存。");
         toggleConfig(false);
     });
 }
@@ -724,7 +724,7 @@ function reportPass() {
 
 function reportBug() {
     const logs = gatherLogs();
-    const defectInfo = prompt("Please enter defect description:");
+    const defectInfo = prompt("请输入缺陷描述:");
     if (defectInfo === null) return; // User cancelled
 
     // #todo: send request to FAIL API
@@ -767,7 +767,7 @@ function submit(result, details = {}) {
     }).catch(err => {
         console.error("Clipboard write failed:", err);
         showOutput(jsonOutput);
-        alert("Clipboard copy failed. Please copy manually from the box.");
+        alert("复制剪贴板失败。请从文本框中手动复制。");
     });
 }
 
@@ -793,7 +793,7 @@ function cleanData() {
     try {
         const rawJson = outputBox.textContent;
         if (!rawJson) {
-            alert("No data to clean.");
+            alert("没有可清洗的数据。");
             return;
         }
         const parsedData = JSON.parse(rawJson);
@@ -811,7 +811,7 @@ function cleanData() {
 
     } catch (e) {
         console.error('Error cleaning data:', e);
-        alert("Failed to process data: " + e.message);
+        alert("处理数据失败: " + e.message);
     }
 }
 
@@ -829,7 +829,7 @@ function uploadCleanedData() {
     try {
         const rawJson = outputBox.textContent;
         if (!rawJson) {
-            alert("No source data found.");
+            alert("未找到源数据。");
             return;
         }
         const parsedData = JSON.parse(rawJson);
@@ -837,7 +837,7 @@ function uploadCleanedData() {
         const content = cleanOutputBox.textContent;
 
         if (!content) {
-            alert("No cleaned content to upload.");
+            alert("没有可上传的清洗内容。");
             return;
         }
 
@@ -847,7 +847,7 @@ function uploadCleanedData() {
         };
 
         uploadCleanBtn.disabled = true;
-        uploadCleanBtn.textContent = "Uploading...";
+        uploadCleanBtn.textContent = "上传中...";
 
         fetch('http://citc-dev.taas.huawei.com/citc/testCaseAutomation/tracedata/upload/text', {
             method: 'POST',
@@ -862,20 +862,20 @@ function uploadCleanedData() {
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
-            alert("Upload successful!");
+            alert("上传成功！");
         })
         .catch(error => {
             console.error('Upload failed:', error);
-            alert("Upload failed: " + error.message);
+            alert("上传失败: " + error.message);
         })
         .finally(() => {
             uploadCleanBtn.disabled = false;
-            uploadCleanBtn.textContent = "Upload";
+            uploadCleanBtn.textContent = "上传";
         });
 
     } catch (e) {
         console.error('Error preparing upload:', e);
-        alert("Failed to prepare upload: " + e.message);
+        alert("准备上传失败: " + e.message);
     }
 }
 
