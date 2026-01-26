@@ -1,3 +1,136 @@
+// --- Services ---
+const OptTraceService = {
+    extractCaseId(jsonData) {
+        if (!jsonData || !jsonData.meta) return "";
+        return jsonData.meta.caseId || "";
+    },
+
+    simplifyJson(data) {
+        if (data === null || data === undefined) return data;
+
+        if (typeof data === 'string') {
+            try {
+                const parsed = JSON.parse(data);
+                if (typeof parsed === 'object' && parsed !== null) {
+                    return this.simplifyJson(parsed);
+                }
+                return data;
+            } catch (e) {
+                return data;
+            }
+        }
+
+        if (Array.isArray(data)) {
+            if (data.length === 0) return [];
+            const firstItem = this.simplifyJson(data[0]);
+            if (data.length > 1) {
+                const remaining = data.length - 1;
+                const truncationMsg = `# ...省略后续${remaining}个相同结构的数据`;
+                return [firstItem, truncationMsg];
+            }
+            return [firstItem];
+        }
+
+        if (typeof data === 'object') {
+            const newObj = {};
+            for (const key in data) {
+                if (Object.prototype.hasOwnProperty.call(data, key)) {
+                    newObj[key] = this.simplifyJson(data[key]);
+                }
+            }
+            return newObj;
+        }
+
+        return data;
+    },
+
+    cleanPath(rawPath) {
+        if (!rawPath) return "";
+        const idx = rawPath.indexOf(':');
+        if (idx !== -1) {
+            return rawPath.substring(idx + 1);
+        }
+        return rawPath;
+    },
+
+    _createCleanedNetworkItem(item, seqCounter) {
+        const rawPath = item.path || "";
+        return {
+            seq: seqCounter,
+            type: "NETWORK",
+            title: item.title || "",
+            method: item.method,
+            systemAlias: item.systemAlias,
+            path: this.cleanPath(rawPath),
+            reqBody: this.simplifyJson(item.reqBody),
+            resBody: this.simplifyJson(item.resBody)
+        };
+    },
+
+    processLogDataDeduplicated(jsonData) {
+        const timeline = jsonData.timeline || [];
+        const cleanedLogs = [];
+        let seqCounter = 1;
+        const seenApiSignatures = new Set();
+
+        for (const item of timeline) {
+            const itemType = item.type;
+
+            if (itemType === "ACTION") {
+                cleanedLogs.push({
+                    seq: seqCounter,
+                    type: "ACTION",
+                    title: item.title || "Unknown Action"
+                });
+                seqCounter++;
+            } else if (itemType === "NETWORK") {
+                const rawPath = item.path || "";
+                const cleanedPath = this.cleanPath(rawPath);
+                const signature = `${item.systemAlias}|${item.method}:${cleanedPath}`;
+
+                if (seenApiSignatures.has(signature)) {
+                    continue;
+                }
+
+                seenApiSignatures.add(signature);
+                const cleanedItem = this._createCleanedNetworkItem(item, seqCounter);
+                cleanedLogs.push(cleanedItem);
+                seqCounter++;
+            }
+        }
+        return cleanedLogs;
+    },
+
+    _formatTimelineReport(cleanedLogs) {
+        const lines = [];
+        for (const log of cleanedLogs) {
+            if (log.type === 'ACTION') {
+                lines.push(`【用户操作】 ${log.title}`);
+                lines.push("-".repeat(5));
+            } else if (log.type === 'NETWORK') {
+                const apiSignature = `${log.systemAlias}|${log.method}:${log.path}`;
+                lines.push(`【API接口】  ${apiSignature}`);
+                lines.push(`【请求内容】 ${JSON.stringify(log.reqBody)}`);
+                lines.push(`【请求结果】 ${JSON.stringify(log.resBody)}`);
+                lines.push("-".repeat(5));
+            }
+        }
+        return lines.join("\n");
+    },
+
+    generateFullTextDedupReport(jsonData) {
+        const caseId = this.extractCaseId(jsonData);
+        const cleanedLogs = this.processLogDataDeduplicated(jsonData);
+
+        const reportParts = [];
+        reportParts.push("=".repeat(5) + ` 操作过程信息 (Case: ${caseId}) ` + "=".repeat(5));
+        reportParts.push("注：已过滤重复的 API ，仅保留首次调用记录。\n");
+        reportParts.push(this._formatTimelineReport(cleanedLogs));
+
+        return reportParts.join("\n");
+    }
+};
+
 // --- State ---
 let state = {
   isRecording: false,
@@ -660,39 +793,21 @@ function cleanData() {
             return;
         }
         const parsedData = JSON.parse(rawJson);
-        const payload = { optJson: parsedData };
 
-        fetch('http://citc-dev.taas.huawei.com/citc/testCaseAutomation/data_process/optTraceJson/compressed/text', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'x-test-app-id': state.config.productCode,
-                'x-user-account': state.config.username
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            cleanOutputSection.classList.remove('hidden');
-            cleanOutputBox.textContent = JSON.stringify(data, null, 2);
-            // Auto scroll to the result
-             setTimeout(() => {
-                cleanOutputSection.scrollIntoView({ behavior: "smooth" });
-            }, 100);
-        })
-        .catch(error => {
-            console.error('Error cleaning data:', error);
-            alert("Failed to clean data: " + error.message);
-        });
+        // Use local service to generate report
+        const report = OptTraceService.generateFullTextDedupReport(parsedData);
+
+        cleanOutputSection.classList.remove('hidden');
+        cleanOutputBox.textContent = report;
+
+        // Auto scroll to the result
+         setTimeout(() => {
+            cleanOutputSection.scrollIntoView({ behavior: "smooth" });
+        }, 100);
 
     } catch (e) {
-        console.error('Invalid JSON:', e);
-        alert("Failed to parse existing data for cleaning.");
+        console.error('Error cleaning data:', e);
+        alert("Failed to process data: " + e.message);
     }
 }
 
@@ -826,8 +941,8 @@ window.addEventListener('message', (event) => {
                 systemAlias: match.alias,
                 path: match.path,
                 url: p.url,
-                reqBody: p.reqBody,
-                resBody: p.resBody
+                reqBody: OptTraceService.simplifyJson(p.reqBody),
+                resBody: OptTraceService.simplifyJson(p.resBody)
             });
         }
     }
