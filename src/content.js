@@ -243,7 +243,7 @@ style.textContent = `
   .review-item { display: flex; gap: 10px; margin-bottom: 10px; padding-bottom: 10px; border-bottom: 1px solid #eee; align-items: flex-start; }
   .review-item input[type="checkbox"] { margin-top: 5px; }
   .review-item .review-details { flex: 1; }
-  .review-item textarea { width: 100%; font-size: 12px; padding: 4px; margin-top: 2px; height: 40px;}
+  .review-item textarea { width: 100%; font-size: 12px; padding: 4px; margin-top: 2px; height: 80px;}
   .review-item .review-meta { font-size: 10px; color: #888; margin-bottom: 2px; }
 
   .output-box { background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; margin-top: 10px; border: 1px solid #ccc; }
@@ -743,7 +743,20 @@ function renderReviewList() {
 
         const meta = document.createElement('div');
         meta.className = 'review-meta';
-        meta.textContent = `#${index+1} [${log.type}] ${new Date(log.timestamp + state.startTime).toLocaleTimeString()}`;
+
+        let sizeInfo = '';
+        if (log.type === 'NETWORK') {
+            const getLen = (data) => {
+                if (!data) return 0;
+                try {
+                    return (typeof data === 'string' ? data.length : JSON.stringify(data).length);
+                } catch (e) { return 0; }
+            };
+            const totalLen = getLen(log.reqBody) + getLen(log.resBody);
+            sizeInfo = ` | Size: ${totalLen}`;
+        }
+
+        meta.textContent = `#${index+1} [${log.type}] ${new Date(log.timestamp + state.startTime).toLocaleTimeString()}${sizeInfo}`;
 
         const textarea = document.createElement('textarea');
         textarea.value = log.title || ''; // Allow editing the title/desc
