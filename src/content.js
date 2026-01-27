@@ -285,6 +285,7 @@ container.innerHTML = `
                     <option value="structure">全量结构压缩 (默认)</option>
                     <option value="length">固定长度压缩</option>
                     <option value="count">固定元素压缩</option>
+                    <option value="none">不压缩 (No Compression)</option>
                 </select>
                 <input type="number" id="cfgCompressionThreshold" placeholder="阈值" style="width: 80px; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
             </div>
