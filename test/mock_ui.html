@@ -4,10 +4,13 @@
     <title>Mock UI</title>
     <script>
         // Mock Chrome API
+        const listeners = [];
         window.chrome = {
             runtime: {
                 getURL: (path) => path,
-                onMessage: { addListener: () => {} }
+                onMessage: {
+                    addListener: (cb) => { listeners.push(cb); }
+                }
             },
             storage: {
                 local: {
@@ -18,6 +21,29 @@
                     set: (data, cb) => { console.log('Saved:', data); if(cb) cb(); }
                 }
             }
+        };
+        window.triggerMessage = (msg) => {
+            listeners.forEach(cb => cb(msg));
+        };
+        // Mock fetch
+        window.fetch = (url, options) => {
+             console.log("Mock Fetch Call:", url, options);
+             if (url.includes("/upload/text")) {
+                 return Promise.resolve({
+                     ok: true,
+                     json: () => Promise.resolve({ status: "success" })
+                 });
+             }
+             return Promise.reject("Unknown URL");
+        };
+        // Mock alert
+        window.alert = (msg) => {
+             console.log("Mock Alert:", msg);
+             // Add to DOM for verification
+             const d = document.createElement("div");
+             d.id = "mock-alert";
+             d.textContent = msg;
+             document.body.appendChild(d);
         };
     </script>
 </head>
