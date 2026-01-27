@@ -298,6 +298,7 @@ container.innerHTML = `
         <div id="configList"></div>
         <button id="addConfigBtn" class="btn btn-secondary btn-sm" style="margin-top:5px;">+ 添加项</button>
         <div style="margin-top: 20px; text-align: right;">
+             <button id="cancelConfigBtn" class="btn btn-secondary" style="margin-right: 10px;">返回</button>
              <button id="saveConfigBtn" class="btn btn-primary">保存并返回</button>
         </div>
     </div>
@@ -364,6 +365,7 @@ container.innerHTML = `
      <!-- Review View Buttons -->
      <button id="reportPassBtn" class="btn btn-success hidden">报告通过用例</button>
      <button id="reportBugBtn" class="btn btn-danger hidden">报告缺陷</button>
+     <button id="cancelReviewBtn" class="btn btn-secondary hidden">取消</button>
 
      <button id="resetBtn" class="btn btn-secondary hidden">重置</button>
   </div>
@@ -402,12 +404,14 @@ const deselectAllBtn = shadowRoot.getElementById('deselectAllBtn');
 
 const settingsBtn = shadowRoot.getElementById('settingsBtn');
 const addConfigBtn = shadowRoot.getElementById('addConfigBtn');
+const cancelConfigBtn = shadowRoot.getElementById('cancelConfigBtn');
 const saveConfigBtn = shadowRoot.getElementById('saveConfigBtn');
 
 const recordBtn = shadowRoot.getElementById('recordBtn');
 const stopBtn = shadowRoot.getElementById('stopBtn');
 const reportPassBtn = shadowRoot.getElementById('reportPassBtn');
 const reportBugBtn = shadowRoot.getElementById('reportBugBtn');
+const cancelReviewBtn = shadowRoot.getElementById('cancelReviewBtn');
 const resetBtn = shadowRoot.getElementById('resetBtn');
 const closeBtn = shadowRoot.getElementById('closeBtn');
 
@@ -546,6 +550,12 @@ function loadConfig(callback) {
 }
 
 function saveConfig() {
+    if (state.isRecording) {
+        if (!confirm("修改配置会导致当前抓包内容丢失，需要重新开始。是否继续？")) {
+            return;
+        }
+    }
+
     const items = [];
     configList.querySelectorAll('.config-item').forEach(div => {
         const alias = div.querySelector('.inp-alias').value.trim();
@@ -575,7 +585,11 @@ function saveConfig() {
         compressionThreshold: compressionThreshold
     }, () => {
         alert("配置已保存。");
-        toggleConfig(false);
+        if (state.isRecording) {
+            resetUI();
+        } else {
+            toggleConfig(false);
+        }
     });
 }
 
@@ -723,6 +737,7 @@ function openReview() {
 
     reportPassBtn.classList.remove('hidden');
     reportBugBtn.classList.remove('hidden');
+    cancelReviewBtn.classList.remove('hidden');
 
     renderReviewList();
 }
@@ -860,6 +875,7 @@ function showOutput(json) {
     // Hide buttons
     reportPassBtn.classList.add('hidden');
     reportBugBtn.classList.add('hidden');
+    cancelReviewBtn.classList.add('hidden');
     resetBtn.classList.remove('hidden');
 
     // Reset copy success message
@@ -998,6 +1014,7 @@ function resetUI() {
 
     reportPassBtn.classList.add('hidden');
     reportBugBtn.classList.add('hidden');
+    cancelReviewBtn.classList.add('hidden');
     resetBtn.classList.add('hidden');
 
     renderCases();
@@ -1015,10 +1032,12 @@ settingsBtn.onclick = () => {
     toggleConfig(true);
 };
 addConfigBtn.onclick = () => addConfigItem();
+cancelConfigBtn.onclick = () => toggleConfig(false);
 saveConfigBtn.onclick = saveConfig;
 
 reportPassBtn.onclick = reportPass;
 reportBugBtn.onclick = reportBug;
+cancelReviewBtn.onclick = resetUI;
 
 copyBtn.onclick = copyToClipboard;
 cleanBtn.onclick = cleanData;
