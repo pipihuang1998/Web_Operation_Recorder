@@ -34,15 +34,26 @@
     this.addEventListener('load', function() {
         const contentType = this.getResponseHeader('content-type') || '';
         if (contentType.includes('application/json')) {
-             notify({
-                type: 'NETWORK',
-                timestamp: startTime,
-                method: xhr._method,
-                url: xhr._url,
-                reqBody: body,
-                resBody: parseJSON(this.responseText),
-                status: this.status
-            });
+             let resBody;
+             if (!this.responseType || this.responseType === 'text') {
+                 resBody = parseJSON(this.responseText);
+             } else if (this.responseType === 'json') {
+                 resBody = this.response;
+             } else {
+                 resBody = null; // Skip blob/arraybuffer to avoid errors
+             }
+
+             if (resBody !== undefined) {
+                 notify({
+                    type: 'NETWORK',
+                    timestamp: startTime,
+                    method: xhr._method,
+                    url: xhr._url,
+                    reqBody: body,
+                    resBody: resBody,
+                    status: this.status
+                });
+             }
         }
     });
 
