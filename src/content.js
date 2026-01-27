@@ -178,7 +178,12 @@ let state = {
   testCase: null,
   sidebarVisible: false,
   startTime: 0,
-  config: { urlWhitelist: [], username: '', productCode: '', compressionMode: 'structure', compressionThreshold: 1000 }
+  config: { urlWhitelist: [], username: '', productCode: '', compressionMode: 'structure', compressionThreshold: 1000 },
+  search: {
+      criteria: { feature: '', subFeature: '', scenarios: [], keyword: '', status: '' },
+      results: [],
+      isCollapsed: false
+  }
 };
 
 // --- DOM Injection of Interceptor ---
@@ -247,6 +252,29 @@ style.textContent = `
   .review-item .review-meta { font-size: 10px; color: #888; margin-bottom: 2px; }
 
   .output-box { background: #f1f1f1; padding: 10px; border-radius: 4px; font-family: monospace; font-size: 11px; white-space: pre-wrap; word-break: break-all; max-height: 200px; overflow-y: auto; margin-top: 10px; border: 1px solid #ccc; }
+
+  /* Search & Accordion */
+  .search-form { background: #fff; padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; border-radius: 4px; }
+  .search-form.collapsed .search-body { display: none; }
+  .search-header { display: flex; justify-content: space-between; cursor: pointer; font-weight: bold; margin-bottom: 5px; align-items: center; }
+  .search-row { display: flex; gap: 5px; margin-bottom: 5px; }
+  .search-row input, .search-row select { flex: 1; padding: 4px; border: 1px solid #ccc; border-radius: 3px; font-size: 12px; }
+
+  .scenario-group { margin-bottom: 5px; border: 1px solid #eee; border-radius: 4px; background: #fff; }
+  .scenario-header { padding: 8px; background: #f8f9fa; cursor: pointer; font-weight: bold; display: flex; justify-content: space-between; font-size: 13px; align-items: center; }
+  .scenario-cases { display: none; padding: 5px; }
+  .scenario-group.expanded .scenario-cases { display: block; }
+
+  .case-card-simple { padding: 8px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 12px; }
+  .case-card-simple:last-child { border-bottom: none; }
+  .case-card-simple:hover { background: #f1f1f1; }
+  .case-card-simple .case-meta { color: #888; font-size: 10px; margin-top: 2px; }
+
+  /* Case Detail */
+  .detail-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 10px; }
+  .detail-row { margin-bottom: 8px; font-size: 13px; }
+  .detail-label { font-weight: bold; color: #555; font-size: 11px; display: block;}
+  .detail-desc { white-space: pre-wrap; background: #f9f9f9; padding: 8px; border-radius: 4px; border: 1px solid #eee; margin-top: 4px; }
 `;
 shadowRoot.appendChild(style);
 
@@ -306,7 +334,13 @@ container.innerHTML = `
     <!-- View 1: Setup -->
     <div id="setupView">
        <h3>选择测试用例</h3>
-       <div id="caseList">正在加载用例...</div>
+       <div id="searchContainer" class="search-form"></div>
+       <div id="searchResults"></div>
+    </div>
+
+    <!-- View 1.5: Case Detail -->
+    <div id="caseDetailView" class="hidden">
+       <!-- Populated by JS -->
     </div>
 
     <!-- View 2: Recording -->
@@ -338,20 +372,23 @@ container.innerHTML = `
           <div id="outputBox" class="output-box"></div>
           <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copySuccessMsg">✓ 已复制到剪贴板</p>
 
-          <div style="margin-top: 10px;">
-              <button id="cleanBtn" class="btn btn-primary btn-sm" style="width:100%">数据清洗</button>
+          <div style="margin-top: 10px; display: none;">
+              <button id="cleanBtn" class="btn btn-primary btn-sm" style="width:100%">数据清洗 (自动)</button>
           </div>
 
           <div id="cleanOutputSection" class="hidden" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                  <span style="font-weight: bold;">清洗后的结果</span>
+                  <span style="font-weight: bold;">操作报告</span>
                   <div>
-                      <button id="uploadCleanBtn" class="btn btn-primary btn-sm">上传</button>
                       <button id="copyCleanBtn" class="btn btn-secondary btn-sm">复制</button>
                   </div>
               </div>
               <div id="cleanOutputBox" class="output-box"></div>
               <p style="font-size:10px; color:#28a745; margin-top:5px; visibility: hidden;" id="copyCleanSuccessMsg">✓ 已复制到剪贴板</p>
+
+              <div style="margin-top: 10px;">
+                 <button id="uploadCleanBtn" class="btn btn-primary btn-sm" style="width: 100%;">上传</button>
+              </div>
           </div>
        </div>
     </div>
@@ -376,12 +413,14 @@ document.body.appendChild(shadowHost);
 // --- Elements ---
 const configView = shadowRoot.getElementById('configView');
 const setupView = shadowRoot.getElementById('setupView');
+const caseDetailView = shadowRoot.getElementById('caseDetailView');
 const recordingView = shadowRoot.getElementById('recordingView');
 const reviewView = shadowRoot.getElementById('reviewView');
 const resultView = shadowRoot.getElementById('resultView');
 
 const mainContent = shadowRoot.getElementById('mainContent');
-const caseList = shadowRoot.getElementById('caseList');
+const searchContainer = shadowRoot.getElementById('searchContainer');
+const searchResults = shadowRoot.getElementById('searchResults');
 const logContainer = shadowRoot.getElementById('logContainer');
 const reviewList = shadowRoot.getElementById('reviewList');
 const caseInfoDisplay = shadowRoot.getElementById('caseInfoDisplay');
@@ -417,12 +456,102 @@ const closeBtn = shadowRoot.getElementById('closeBtn');
 
 // --- Mock Data ---
 const MOCK_CASES = [
-  { id: "CASE-0001", title: "用户登录测试", desc: "1. 点击登录\n2. 输入 'admin'\n3. 登录成功" },
-  { id: "CASE-0002", title: "新增测试", desc: "1. 输入新增按钮\n2. 点击确认\n3. 新增成功" },
-  { id: "CASE-0003", title: "搜索测试", desc: "1. 输入2025\n2. 点击搜索\n3. 搜索成功" }
+  {
+      id: "CASE-0001",
+      title: "用户登录成功测试",
+      desc: "1. 点击登录\n2. 输入正确账号 'admin'\n3. 输入正确密码\n4. 登录成功，跳转首页",
+      feature: "认证模块",
+      subFeature: "登录",
+      scenario: "标准登录场景",
+      status: "已发布"
+  },
+  {
+      id: "CASE-0002",
+      title: "用户登录失败-密码错误",
+      desc: "1. 点击登录\n2. 输入账号 'admin'\n3. 输入错误密码\n4. 提示'密码错误'",
+      feature: "认证模块",
+      subFeature: "登录",
+      scenario: "标准登录场景",
+      status: "已发布"
+  },
+  {
+      id: "CASE-0003",
+      title: "创建新订单",
+      desc: "1. 进入订单页\n2. 点击新增\n3. 填写详情\n4. 保存\n5. 列表可见新订单",
+      feature: "订单中心",
+      subFeature: "订单管理",
+      scenario: "订单全流程",
+      status: "设计中"
+  },
+  {
+      id: "CASE-0004",
+      title: "取消订单",
+      desc: "1. 选中待支付订单\n2. 点击取消\n3. 订单状态变为已取消",
+      feature: "订单中心",
+      subFeature: "订单管理",
+      scenario: "订单全流程",
+      status: "已发布"
+  },
+  {
+      id: "CASE-0005",
+      title: "搜索历史订单",
+      desc: "1. 输入订单号\n2. 搜索\n3. 结果显示匹配项",
+      feature: "订单中心",
+      subFeature: "查询",
+      scenario: "订单查询",
+      status: "已发布"
+  }
 ];
 
 // --- Helpers ---
+function mockSearchAPI(criteria) {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const results = MOCK_CASES.filter(c => {
+                // Feature (Required)
+                if (criteria.feature && c.feature !== criteria.feature) return false;
+
+                // SubFeature (Required)
+                if (criteria.subFeature && c.subFeature !== criteria.subFeature) return false;
+
+                // Scenario (Multi-select)
+                if (criteria.scenarios && criteria.scenarios.length > 0) {
+                     // Check if case scenario matches any of the selected scenarios
+                     if (!criteria.scenarios.includes(c.scenario)) return false;
+                }
+
+                // Title Keyword (Optional)
+                if (criteria.keyword) {
+                    if (!c.title.toLowerCase().includes(criteria.keyword.toLowerCase())) return false;
+                }
+
+                // Status (Optional)
+                if (criteria.status) {
+                    if (c.status !== criteria.status) return false;
+                }
+
+                return true;
+            });
+            resolve(results);
+        }, 300); // Simulate delay
+    });
+}
+
+function groupCasesByScenario(cases) {
+    const groups = {};
+    cases.forEach(c => {
+        if (!groups[c.scenario]) {
+            groups[c.scenario] = {
+                name: c.scenario,
+                count: 0,
+                cases: []
+            };
+        }
+        groups[c.scenario].cases.push(c);
+        groups[c.scenario].count++;
+    });
+    return Object.values(groups);
+}
 function generateUUID() {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
         var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
@@ -532,12 +661,16 @@ function removeLog(id, element) {
 // --- Config Logic ---
 
 function loadConfig(callback) {
-    chrome.storage.local.get(['urlWhitelist', 'username', 'productCode', 'compressionMode', 'compressionThreshold'], (result) => {
+    chrome.storage.local.get(['urlWhitelist', 'username', 'productCode', 'compressionMode', 'compressionThreshold', 'searchCriteria'], (result) => {
         state.config.urlWhitelist = result.urlWhitelist || [];
         state.config.username = result.username || '';
         state.config.productCode = result.productCode || '';
         state.config.compressionMode = result.compressionMode || 'structure';
         state.config.compressionThreshold = result.compressionThreshold !== undefined ? result.compressionThreshold : 1000;
+
+        if (result.searchCriteria) {
+            state.search.criteria = result.searchCriteria;
+        }
 
         if (cfgUsername) cfgUsername.value = state.config.username;
         if (cfgProductCode) cfgProductCode.value = state.config.productCode;
@@ -545,6 +678,7 @@ function loadConfig(callback) {
         if (cfgCompressionThreshold) cfgCompressionThreshold.value = state.config.compressionThreshold;
 
         renderConfig();
+        renderSearchForm();
         if (callback) callback();
     });
 }
@@ -661,6 +795,7 @@ function addConfigItem(alias = '', prefix = '', filterGateway = false) {
 function toggleConfig(show) {
     if (show) {
         setupView.classList.add('hidden');
+        caseDetailView.classList.add('hidden');
         recordingView.classList.add('hidden');
         resultView.classList.add('hidden');
         reviewView.classList.add('hidden');
@@ -670,7 +805,7 @@ function toggleConfig(show) {
         if (state.isRecording) {
             recordingView.classList.remove('hidden');
         } else if (state.testCase) {
-             setupView.classList.remove('hidden');
+             caseDetailView.classList.remove('hidden');
         } else {
             setupView.classList.remove('hidden');
         }
@@ -680,24 +815,198 @@ function toggleConfig(show) {
 
 // --- UI Logic ---
 
-function renderCases() {
-    caseList.innerHTML = '';
-    MOCK_CASES.forEach(c => {
-        const div = document.createElement('div');
-        div.className = 'case-card';
-        div.innerHTML = `<strong>${c.id}: ${c.title}</strong><br><small>${c.desc.replace(/\n/g, '<br>')}</small>`;
-        div.onclick = () => selectCase(c, div);
-        caseList.appendChild(div);
+function renderSearchForm() {
+    searchContainer.innerHTML = '';
+    const { criteria } = state.search;
+
+    // Header
+    const header = document.createElement('div');
+    header.className = 'search-header';
+    header.innerHTML = `<span>查询条件</span><span>${state.search.isCollapsed ? '▼' : '▲'}</span>`;
+    header.onclick = () => {
+        state.search.isCollapsed = !state.search.isCollapsed;
+        searchContainer.classList.toggle('collapsed', state.search.isCollapsed);
+        renderSearchForm();
+    };
+    searchContainer.appendChild(header);
+
+    if (state.search.isCollapsed) {
+        searchContainer.classList.add('collapsed');
+        return;
+    }
+    searchContainer.classList.remove('collapsed');
+
+    const body = document.createElement('div');
+    body.className = 'search-body';
+
+    // Feature & SubFeature
+    const row1 = document.createElement('div');
+    row1.className = 'search-row';
+    row1.innerHTML = `
+        <input type="text" id="sFeature" placeholder="特性 (必填)" value="${criteria.feature || ''}">
+        <input type="text" id="sSubFeature" placeholder="子特性 (必填)" value="${criteria.subFeature || ''}">
+    `;
+    body.appendChild(row1);
+
+    // Scenario
+    const row2 = document.createElement('div');
+    row2.className = 'search-row';
+    row2.innerHTML = `
+        <input type="text" id="sScenarios" placeholder="测试场景 (逗号分隔)" value="${criteria.scenarios.join(',') || ''}">
+    `;
+    body.appendChild(row2);
+
+    // Keyword & Status
+    const row3 = document.createElement('div');
+    row3.className = 'search-row';
+    row3.innerHTML = `
+        <input type="text" id="sKeyword" placeholder="标题关键字" value="${criteria.keyword || ''}">
+        <select id="sStatus">
+            <option value="">所有状态</option>
+            <option value="已发布" ${criteria.status === '已发布' ? 'selected' : ''}>已发布</option>
+            <option value="设计中" ${criteria.status === '设计中' ? 'selected' : ''}>设计中</option>
+        </select>
+    `;
+    body.appendChild(row3);
+
+    // Search Button
+    const btnRow = document.createElement('div');
+    btnRow.style.textAlign = 'right';
+    btnRow.style.marginTop = '5px';
+    const sBtn = document.createElement('button');
+    sBtn.className = 'btn btn-primary btn-sm';
+    sBtn.textContent = '查询';
+    sBtn.onclick = handleSearch;
+    btnRow.appendChild(sBtn);
+    body.appendChild(btnRow);
+
+    searchContainer.appendChild(body);
+}
+
+function handleSearch() {
+    const feature = shadowRoot.getElementById('sFeature').value.trim();
+    const subFeature = shadowRoot.getElementById('sSubFeature').value.trim();
+    const scenariosStr = shadowRoot.getElementById('sScenarios').value.trim();
+    const keyword = shadowRoot.getElementById('sKeyword').value.trim();
+    const status = shadowRoot.getElementById('sStatus').value;
+
+    if (!feature || !subFeature) {
+        alert("特性和子特性为必填项");
+        return;
+    }
+
+    const scenarios = scenariosStr ? scenariosStr.split(/,|，/).map(s => s.trim()).filter(s => s) : [];
+
+    const criteria = { feature, subFeature, scenarios, keyword, status };
+    state.search.criteria = criteria;
+
+    // Save to storage
+    chrome.storage.local.set({ searchCriteria: criteria });
+
+    searchResults.innerHTML = '<div style="padding:10px;text-align:center;color:#999;">查询中...</div>';
+
+    mockSearchAPI(criteria).then(results => {
+        state.search.results = results;
+        state.search.isCollapsed = true;
+        renderSearchForm();
+        renderSearchResults();
     });
 }
 
-function selectCase(c, el) {
-    state.testCase = c;
-    const cards = shadowRoot.querySelectorAll('.case-card');
-    cards.forEach(card => card.classList.remove('selected'));
-    el.classList.add('selected');
+function renderSearchResults() {
+    searchResults.innerHTML = '';
+    const results = state.search.results;
+    if (!results || results.length === 0) {
+        searchResults.innerHTML = '<div style="padding:10px;text-align:center;color:#999;">无数据</div>';
+        return;
+    }
 
-    recordBtn.classList.remove('hidden');
+    const groups = groupCasesByScenario(results);
+    groups.forEach(g => {
+        const groupDiv = document.createElement('div');
+        groupDiv.className = 'scenario-group';
+
+        const header = document.createElement('div');
+        header.className = 'scenario-header';
+        header.innerHTML = `<span>${g.name || '未分类'}</span> <span class="badge" style="background:#eee;padding:2px 6px;border-radius:10px;font-size:10px;">${g.count}</span>`;
+        header.onclick = () => {
+            groupDiv.classList.toggle('expanded');
+        };
+
+        const casesDiv = document.createElement('div');
+        casesDiv.className = 'scenario-cases';
+
+        g.cases.forEach(c => {
+            const card = document.createElement('div');
+            card.className = 'case-card-simple';
+            const descPreview = c.desc.split('\n').slice(0, 3).join('\n');
+            card.innerHTML = `
+                <div style="font-weight:bold;">${c.id} ${c.title}</div>
+                <div class="case-meta" style="white-space: pre-wrap;">${descPreview}</div>
+                <div class="case-meta" style="text-align:right;">${c.status}</div>
+            `;
+            card.onclick = (e) => {
+                e.stopPropagation();
+                showCaseDetail(c);
+            };
+            casesDiv.appendChild(card);
+        });
+
+        groupDiv.appendChild(header);
+        groupDiv.appendChild(casesDiv);
+        searchResults.appendChild(groupDiv);
+    });
+}
+
+function showCaseDetail(c) {
+    state.testCase = c;
+    setupView.classList.add('hidden');
+    caseDetailView.classList.remove('hidden');
+
+    caseDetailView.innerHTML = '';
+
+    // Header with Back Button
+    const header = document.createElement('div');
+    header.style.marginBottom = '10px';
+    const backBtn = document.createElement('button');
+    backBtn.className = 'btn btn-secondary btn-sm';
+    backBtn.textContent = '← 返回';
+    backBtn.onclick = () => {
+        caseDetailView.classList.add('hidden');
+        setupView.classList.remove('hidden');
+    };
+    header.appendChild(backBtn);
+    caseDetailView.appendChild(header);
+
+    // Details
+    const content = document.createElement('div');
+    content.innerHTML = `
+        <div class="detail-header">
+            <h3>${c.id} ${c.title}</h3>
+            <span class="badge" style="background:#007bff;color:white;padding:2px 6px;border-radius:4px;font-size:12px;">${c.status}</span>
+        </div>
+        <div class="detail-row"><span class="detail-label">特性 / 子特性:</span> ${c.feature} / ${c.subFeature}</div>
+        <div class="detail-row"><span class="detail-label">测试场景:</span> ${c.scenario}</div>
+        <div class="detail-row">
+            <span class="detail-label">描述/步骤:</span>
+            <div class="detail-desc">${c.desc}</div>
+        </div>
+    `;
+    caseDetailView.appendChild(content);
+
+    // Start Recording Button
+    const footer = document.createElement('div');
+    footer.style.marginTop = '20px';
+    footer.style.textAlign = 'center';
+
+    const startBtn = document.createElement('button');
+    startBtn.className = 'btn btn-primary';
+    startBtn.textContent = '开始录制';
+    startBtn.onclick = () => {
+        startRecording();
+    };
+    footer.appendChild(startBtn);
+    caseDetailView.appendChild(footer);
 }
 
 function startRecording() {
@@ -709,6 +1018,7 @@ function startRecording() {
 
         logContainer.innerHTML = '';
         setupView.classList.add('hidden');
+        caseDetailView.classList.add('hidden');
         recordingView.classList.remove('hidden');
         resultView.classList.add('hidden');
         reviewView.classList.add('hidden');
@@ -881,8 +1191,9 @@ function showOutput(json) {
     // Reset copy success message
     copySuccessMsg.style.visibility = 'hidden';
     copyCleanSuccessMsg.style.visibility = 'hidden';
-    cleanOutputSection.classList.add('hidden');
-    cleanOutputBox.textContent = '';
+
+    // Auto Clean
+    cleanData();
 }
 
 function cleanData() {
@@ -1009,6 +1320,7 @@ function resetUI() {
 
     resultView.classList.add('hidden');
     setupView.classList.remove('hidden');
+    caseDetailView.classList.add('hidden');
     configView.classList.add('hidden');
     reviewView.classList.add('hidden');
 
@@ -1017,7 +1329,8 @@ function resetUI() {
     cancelReviewBtn.classList.add('hidden');
     resetBtn.classList.add('hidden');
 
-    renderCases();
+    renderSearchForm();
+    renderSearchResults();
 }
 
 // --- Event Handlers ---
@@ -1054,7 +1367,8 @@ chrome.runtime.onMessage.addListener((msg) => {
         state.sidebarVisible = !state.sidebarVisible;
         if (state.sidebarVisible) {
             container.classList.add('visible');
-            renderCases();
+            renderSearchForm();
+            renderSearchResults();
         } else {
             container.classList.remove('visible');
         }
