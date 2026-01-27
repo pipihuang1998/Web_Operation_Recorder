@@ -5,14 +5,15 @@ const OptTraceService = {
         return jsonData.meta.caseId || "";
     },
 
-    simplifyJson(data) {
+    simplifyJson(data, config = { mode: 'structure', threshold: 1000 }) {
         if (data === null || data === undefined) return data;
 
+        // 1. Handle String Parsing
         if (typeof data === 'string') {
             try {
                 const parsed = JSON.parse(data);
                 if (typeof parsed === 'object' && parsed !== null) {
-                    return this.simplifyJson(parsed);
+                    return this.simplifyJson(parsed, config);
                 }
                 return data;
             } catch (e) {
@@ -20,22 +21,60 @@ const OptTraceService = {
             }
         }
 
-        if (Array.isArray(data)) {
-            if (data.length === 0) return [];
-            const firstItem = this.simplifyJson(data[0]);
-            if (data.length > 1) {
-                const remaining = data.length - 1;
-                const truncationMsg = `# ...省略后续${remaining}个相同结构的数据`;
-                return [firstItem, truncationMsg];
+        const mode = config.mode || 'structure';
+        const threshold = config.threshold !== undefined ? config.threshold : 1000;
+
+        // 2. Handling 'length' mode (Only effective at this level, switches mode for children)
+        if (mode === 'length') {
+            let len = 0;
+            try {
+                len = JSON.stringify(data).length;
+            } catch(e) { len = 0; }
+
+            if (len > threshold) {
+                 return this.simplifyJson(data, { mode: 'structure', threshold });
+            } else {
+                 return this.simplifyJson(data, { mode: 'none', threshold });
             }
-            return [firstItem];
         }
 
+        // 3. Array Handling
+        if (Array.isArray(data)) {
+            if (data.length === 0) return [];
+
+            if (mode === 'structure') {
+                 const firstItem = this.simplifyJson(data[0], config);
+                 if (data.length > 1) {
+                    const remaining = data.length - 1;
+                    const truncationMsg = `# ...省略后续${remaining}个相同结构的数据`;
+                    return [firstItem, truncationMsg];
+                }
+                return [firstItem];
+            }
+
+            if (mode === 'count') {
+                const limit = threshold;
+                const kept = [];
+                for (let i = 0; i < Math.min(data.length, limit); i++) {
+                    kept.push(this.simplifyJson(data[i], config));
+                }
+                if (data.length > limit) {
+                     const remaining = data.length - limit;
+                     kept.push(`# ...省略后续${remaining}个数据`);
+                }
+                return kept;
+            }
+
+            // mode === 'none' or unknown: keep all
+            return data.map(item => this.simplifyJson(item, config));
+        }
+
+        // 4. Object Handling
         if (typeof data === 'object') {
             const newObj = {};
             for (const key in data) {
                 if (Object.prototype.hasOwnProperty.call(data, key)) {
-                    newObj[key] = this.simplifyJson(data[key]);
+                    newObj[key] = this.simplifyJson(data[key], config);
                 }
             }
             return newObj;
@@ -62,8 +101,8 @@ const OptTraceService = {
             method: item.method,
             systemAlias: item.systemAlias,
             path: this.cleanPath(rawPath),
-            reqBody: this.simplifyJson(item.reqBody),
-            resBody: this.simplifyJson(item.resBody)
+            reqBody: item.reqBody,
+            resBody: item.resBody
         };
     },
 
@@ -139,7 +178,7 @@ let state = {
   testCase: null,
   sidebarVisible: false,
   startTime: 0,
-  config: { urlWhitelist: [], username: '', productCode: '' }
+  config: { urlWhitelist: [], username: '', productCode: '', compressionMode: 'structure', compressionThreshold: 1000 }
 };
 
 // --- DOM Injection of Interceptor ---
@@ -237,6 +276,21 @@ container.innerHTML = `
                 <label style="font-size: 12px; font-weight: bold; display:block;">用户名 (x-user-account)</label>
                 <input type="text" id="cfgUsername" placeholder="e.g. h00894562" style="width: 100%; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
             </div>
+        </div>
+
+        <div style="margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+            <label style="font-size: 12px; font-weight: bold; display:block;">数据压缩策略 (Data Compression)</label>
+            <div style="display:flex; gap:10px; margin-top:5px;">
+                <select id="cfgCompressionMode" style="flex:1; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
+                    <option value="structure">全量结构压缩 (默认)</option>
+                    <option value="length">固定长度压缩</option>
+                    <option value="count">固定元素压缩</option>
+                </select>
+                <input type="number" id="cfgCompressionThreshold" placeholder="阈值" style="width: 80px; padding: 4px; border: 1px solid #ccc; border-radius: 3px;">
+            </div>
+            <p style="font-size:10px; color:#999; margin-top:3px;">
+                阈值: 长度限制 (字符数) 或 列表元素个数
+            </p>
         </div>
 
         <p style="font-size:12px; color:#666;">定义URL白名单和别名。仅捕获匹配的URL。</p>
@@ -340,6 +394,8 @@ const copyCleanSuccessMsg = shadowRoot.getElementById('copyCleanSuccessMsg');
 const configList = shadowRoot.getElementById('configList');
 const cfgProductCode = shadowRoot.getElementById('cfgProductCode');
 const cfgUsername = shadowRoot.getElementById('cfgUsername');
+const cfgCompressionMode = shadowRoot.getElementById('cfgCompressionMode');
+const cfgCompressionThreshold = shadowRoot.getElementById('cfgCompressionThreshold');
 const selectAllBtn = shadowRoot.getElementById('selectAllBtn');
 const deselectAllBtn = shadowRoot.getElementById('deselectAllBtn');
 
@@ -471,13 +527,17 @@ function removeLog(id, element) {
 // --- Config Logic ---
 
 function loadConfig(callback) {
-    chrome.storage.local.get(['urlWhitelist', 'username', 'productCode'], (result) => {
+    chrome.storage.local.get(['urlWhitelist', 'username', 'productCode', 'compressionMode', 'compressionThreshold'], (result) => {
         state.config.urlWhitelist = result.urlWhitelist || [];
         state.config.username = result.username || '';
         state.config.productCode = result.productCode || '';
+        state.config.compressionMode = result.compressionMode || 'structure';
+        state.config.compressionThreshold = result.compressionThreshold !== undefined ? result.compressionThreshold : 1000;
 
         if (cfgUsername) cfgUsername.value = state.config.username;
         if (cfgProductCode) cfgProductCode.value = state.config.productCode;
+        if (cfgCompressionMode) cfgCompressionMode.value = state.config.compressionMode;
+        if (cfgCompressionThreshold) cfgCompressionThreshold.value = state.config.compressionThreshold;
 
         renderConfig();
         if (callback) callback();
@@ -497,15 +557,21 @@ function saveConfig() {
 
     const username = cfgUsername.value.trim();
     const productCode = cfgProductCode.value.trim();
+    const compressionMode = cfgCompressionMode.value;
+    const compressionThreshold = parseInt(cfgCompressionThreshold.value, 10) || 1000;
 
     state.config.urlWhitelist = items;
     state.config.username = username;
     state.config.productCode = productCode;
+    state.config.compressionMode = compressionMode;
+    state.config.compressionThreshold = compressionThreshold;
 
     chrome.storage.local.set({
         urlWhitelist: items,
         username: username,
-        productCode: productCode
+        productCode: productCode,
+        compressionMode: compressionMode,
+        compressionThreshold: compressionThreshold
     }, () => {
         alert("配置已保存。");
         toggleConfig(false);
@@ -995,13 +1061,18 @@ window.addEventListener('message', (event) => {
 
             const title = `[${match.alias}] ${match.path}`;
 
+            const compressionConfig = {
+                mode: state.config.compressionMode,
+                threshold: state.config.compressionThreshold
+            };
+
             addLog('NETWORK', `${p.method} ${title} (${p.status})`, {
                 method: p.method,
                 systemAlias: match.alias,
                 path: match.path,
                 url: p.url,
-                reqBody: OptTraceService.simplifyJson(p.reqBody),
-                resBody: OptTraceService.simplifyJson(p.resBody)
+                reqBody: OptTraceService.simplifyJson(p.reqBody, compressionConfig),
+                resBody: OptTraceService.simplifyJson(p.resBody, compressionConfig)
             });
         }
     }
